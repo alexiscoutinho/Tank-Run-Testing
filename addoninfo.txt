@@ -2,8 +2,8 @@
 {
      addonSteamAppID         "550"
      addontitle              "Tank Run Testing Initiative" 
-     addonversion            "1.1"
-     addonauthor             "Jugger"
+     addonversion            "1.3"
+     addonauthor             "Jugger and Jack Bauer"
      addonDescription        "Experimental changes to Tank Run Mutation" 
 }
  
