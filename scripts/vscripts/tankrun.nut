@@ -62,6 +62,11 @@ MutationOptions <-
 		}
 		return 0;
 	}
+
+        function ShouldPlayBossMusic( idx )
+        {
+                return true;
+        }
 }
 
 MutationState <-
@@ -76,9 +81,11 @@ MutationState <-
 	LastSpawnTime = 0
 	SpawnInterval = 20
 	DoubleTanks = false
-	TankBiled = {}
+	Tanks = {}
+	TanksBiled = {}
 	TanksDisabled = false
 	TankHealth = 4000
+	InWaterTankThink = true
 	BileHurtTankThink = false
 	SpawnTankThink = false
 	TriggerRescueThink = false
@@ -153,6 +160,11 @@ if ( IsMissionFinalMap() )
 			SessionState.SpawnTankThink = true;
 		}
 
+		if ( g_MapName == "c4m5_milltown_escape" )
+		{
+			SessionState.RescueDelay = 480;
+		}
+
 		if ( SessionState.FinaleType == 4 )
 			return;
 
@@ -164,8 +176,6 @@ if ( IsMissionFinalMap() )
 		SessionState.FinaleStarted = true;
 		SessionState.TriggerRescueThink = true;
 
-		if ( g_MapName == "c4m5_milltown_escape" )
-			SessionState.SpawnInterval = 50;
 	}
 
 	function OnGameEvent_gauntlet_finale_start( params )
@@ -195,18 +205,24 @@ function AllowTakeDamage( damageTable )
 		{
 			if ( damageTable.Inflictor.GetClassname() == "pipe_bomb_projectile" )
 				damageTable.DamageDone = 500;
-
-			if ( damageTable.Weapon )
+			else if ( damageTable.Weapon )
 			{
 				local weaponClass = damageTable.Weapon.GetClassname();
 				if ( weaponClass == "weapon_pistol" )
-					damageTable.DamageDone = (damageTable.DamageDone * 1.25);
+					damageTable.DamageDone = damageTable.DamageDone * 1.25;
 				else if ( weaponClass == "weapon_melee" )
-					damageTable.DamageDone = (damageTable.DamageDone * 1.334);
-
-				local dmgtype = damageTable.DamageType;
-				if ( dmgtype & DMG_BLAST && dmgtype & DMG_BULLET )
-					damageTable.Victim.OverrideFriction( 0.5, 1.75 );
+					damageTable.DamageDone = damageTable.DamageDone * 1.334;
+				else if ( damageTable.DamageType & DMG_BLAST )
+				{
+					if ( weaponClass.find( "smg" ) != null )
+						damageTable.Victim.OverrideFriction( 1.2, 2.0 );
+					else if ( weaponClass.find( "shotgun" ) != null )
+						damageTable.Victim.OverrideFriction( 2.3, 2.0 );
+					else if ( weaponClass.find( "sniper" ) != null || weaponClass.find( "hunting" ) != null )
+						damageTable.Victim.OverrideFriction( 1.5, 2.0 );
+					else if ( weaponClass.find( "rifle" ) != null )
+						damageTable.Victim.OverrideFriction( 1.2, 2.0 );
+				}//cant easily differentiate bigger gl explosion
 			}
 		}
 	}
@@ -259,9 +275,26 @@ function LeftSafeAreaThink()
 	}
 }
 
+function InWaterTankThink()
+{
+	foreach ( tank in SessionState.Tanks )
+	{
+		if ( NetProps.GetPropInt( tank, "m_nWaterLevel" ) == 0 )
+			tank.SetFriction( 1.0 );
+		else
+			tank.SetFriction( 1.7 );
+	}
+}
+
+function ResetTankFrictions()
+{
+	foreach ( tank in SessionState.Tanks )
+		tank.SetFriction( 1.0 );
+}
+
 function BileHurtTankThink()
 {
-	foreach( tank, survivor in SessionState.TankBiled )
+	foreach( tank, survivor in SessionState.TanksBiled )
 	{
 		tank.TakeDamage( 100, 0, survivor );
 	}
@@ -347,7 +380,7 @@ function OnGameEvent_round_start_post_nav( params )
 
 		if ( population == "tank" || population == "river_docks_trap" )
 			continue;
-		else if ( g_MapName == "c10m3_ranchhouse" && population == "church" )
+		else if ( g_MapName == "c10m3_ranchhouse" && population == "church" )//check if there are other special spawners in other maps
 			DoEntFire( "!self", "AddOutput", "population tank", 0.0, null, spawner );
 		else
 			spawner.Kill();
@@ -360,18 +393,7 @@ function OnGameEvent_round_start_post_nav( params )
 		SessionOptions.cm_TankLimit = 0;
 		SessionState.TanksDisabled = true;
 	}
-	else if ( g_MapName == "c10m2_drainage" )
-	{
-		local ent = Entities.FindByName( null, "button_minifinale" );
-		EntityOutputs.AddOutput( ent, "OnPressed", "!self", "RunScriptCode", "SessionState.SpawnInterval = 25", 0.0, 1 );
-		ent = Entities.FindByName( null, "logic_stop_redlight" );
-		EntityOutputs.AddOutput( ent, "OnTrigger", "!self", "RunScriptCode", "SessionState.SpawnInterval = 20", 0.0, 1 );
-	}
-	else if ( g_MapName == "c10m3_ranchhouse" )
-	{
-		local button = Entities.FindByName( null, "button_safedoor_PANIC" );
-		EntityOutputs.AddOutput( button, "OnPressed", "!self", "RunScriptCode", "SessionState.SpawnInterval = 30", 0.0, 1 );
-	}
+
 	else if ( g_MapName == "c6m2_bedlam" )
 	{
 		local button = Entities.FindByName( null, "button_minifinale" );
@@ -411,11 +433,16 @@ function OnGameEvent_player_disconnect( params )
 	if ( !player )
 		return;
 
-	if ( player.GetZombieType() == 8 && player in SessionState.TankBiled )
+	if ( player.GetZombieType() == 8 )
 	{
-		SessionState.TankBiled.rawdelete( player );
-		if ( SessionState.TankBiled.len() == 0 )
-			SessionState.BileHurtTankThink = false;
+		SessionState.Tanks.rawdelete( player );
+
+		if ( player in SessionState.TanksBiled )
+		{
+			SessionState.TanksBiled.rawdelete( player );
+			if ( SessionState.TanksBiled.len() == 0 )
+				SessionState.BileHurtTankThink = false;
+		}
 	}
 }
 
@@ -434,12 +461,12 @@ function OnGameEvent_player_now_it( params )
 
 	if ( attacker.IsSurvivor() && victim.GetZombieType() == 8 )
 	{
-		if ( victim in SessionState.TankBiled )
+		if ( victim in SessionState.TanksBiled )
 			return;
 
 		victim.SetFriction( 2.0 );
-		SessionState.TankBiled.rawset( victim, attacker );
-		if ( SessionState.TankBiled.len() == 1 )
+		SessionState.TanksBiled.rawset( victim, attacker );
+		if ( SessionState.TanksBiled.len() == 1 )
 			SessionState.BileHurtTankThink = true;
 	}
 }
@@ -451,11 +478,11 @@ function OnGameEvent_player_no_longer_it( params )
 	if ( !victim )
 		return;
 
-	if ( victim.GetZombieType() == 8 && victim in SessionState.TankBiled )
+	if ( victim.GetZombieType() == 8 && victim in SessionState.TanksBiled )
 	{
 		victim.SetFriction( 1.0 );
-		SessionState.TankBiled.rawdelete( victim );
-		if ( SessionState.TankBiled.len() == 0 )
+		SessionState.TanksBiled.rawdelete( victim );
+		if ( SessionState.TanksBiled.len() == 0 )
 			SessionState.BileHurtTankThink = false;
 	}
 }
@@ -484,6 +511,8 @@ function OnGameEvent_tank_spawn( params )
 		tank.SetMaxHealth( SessionState.TankHealth / 4 );
 		tank.SetHealth( SessionState.TankHealth / 4 );
 	}
+
+	SessionState.Tanks.rawset( tank, tank );
 
 	if ( !SessionState.ModelCheck )
 	{
@@ -517,10 +546,10 @@ function OnGameEvent_tank_killed( params )
 {
 	local tank = GetPlayerFromUserID( params["userid"] );
 
-	if ( tank in SessionState.TankBiled )
+	if ( tank in SessionState.TanksBiled )
 	{
-		SessionState.TankBiled.rawdelete( tank );
-		if ( SessionState.TankBiled.len() == 0 )
+		SessionState.TanksBiled.rawdelete( tank );
+		if ( SessionState.TanksBiled.len() == 0 )
 			SessionState.BileHurtTankThink = false;
 	}
 
@@ -536,6 +565,8 @@ function TankRunThink()
 		SpawnTankThink();
 	if ( SessionState.TriggerRescueThink )
 		TriggerRescueThink();
+	if ( SessionState.InWaterTankThink )
+		InWaterTankThink();
 	if ( SessionState.BileHurtTankThink )
 		BileHurtTankThink();
 	if ( SessionState.CheckPrimaryWeaponThink )

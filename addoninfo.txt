@@ -1,9 +1,9 @@
 "AddonInfo"
 {
      addonSteamAppID         "550"
-     addontitle              "First Beta of Tank Run Testing Initiative" 
-     addonversion            "1.0"
-     addonauthor             "Jugger/Jack Bauer"
-     addonDescription        "Experimental changes to Tank Run" 
+     addontitle              "Tank Run Testing Initiative" 
+     addonversion            "1.1"
+     addonauthor             "Jugger"
+     addonDescription        "Experimental changes to Tank Run Mutation" 
 }
  
