@@ -36,8 +36,8 @@ function OnGameEvent_round_start( params )
 	spawner.GetScriptScope().InputSpawnZombie <- OnSpawnZombie;
 }
 
-local func = ChallengeScript.OnGameEvent_tank_spawn;
-ChallengeScript.OnGameEvent_tank_spawn = function ( params )
+local func = delete ChallengeScript.OnGameEvent_tank_spawn;
+function OnGameEvent_tank_spawn( params )
 {
 	local tank = GetPlayerFromUserID( params["userid"] );
 	if ( !TrainCarTankSpawn || (tank.GetOrigin() - Entities.FindByName( null, "spawn_train_tank_coop" ).GetOrigin()).Length() > 10 )

@@ -190,8 +190,8 @@ if ( IsMissionFinalMap() )
 				if ( (area = player.GetLastKnownArea()) && area.GetSpawnAttributes() & FINALE )
 					continue;
 				//check if Use works with incap with null area
-				if ( !activator.IsPlayer() )
-					activator = EntIndexToHScript( 1 );
+				if ( !activator || !activator.IsPlayer() )
+					activator = Director.GetRandomSurvivor();
 				DoEntFire( "trigger_finale", "Use", "", 0.0, activator, caller );
 				return false;
 			}
