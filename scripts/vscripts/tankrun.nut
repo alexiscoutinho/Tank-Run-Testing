@@ -79,7 +79,7 @@ MutationState <-
 	TanksBiled = {}
 	TanksDisabled = false//cant I just use the think toggle?
 	TankHealth = 4000
-	InWaterTankThink = true
+	TankSpeedThink = true
 	BileHurtTankThink = false
 	SpawnTankThink = false
 	TriggerRescueThink = false
@@ -304,20 +304,30 @@ function LeftSafeAreaThink()
 	}
 }
 
-function InWaterTankThink()
+function TankSpeedThink()
 {
 	foreach ( tank in SessionState.Tanks )
 	{
-		if ( NetProps.GetPropInt( tank, "m_nWaterLevel" ) == 0 )
-			tank.SetFriction( 1.0 );
+		if ( tank in SessionState.TanksBiled )
+		{
+			if ( NetProps.GetPropInt( tank, "m_nWaterLevel" ) == 0 )
+				tank.SetFriction( 2.0 );
+			else
+				tank.SetFriction( 2.5 );
+		}
 		else
-			tank.SetFriction( 1.7 );
+		{
+			if ( NetProps.GetPropInt( tank, "m_nWaterLevel" ) == 0 )
+				tank.SetFriction( 1.0 );
+			else
+				tank.SetFriction( 1.7 );
+		}
 	}
 }
 
 function BileHurtTankThink()
 {
-	foreach( tank, survivor in SessionState.TanksBiled )
+	foreach ( tank, survivor in SessionState.TanksBiled )
 	{
 		tank.TakeDamage( 100, 0, survivor );
 	}
@@ -474,12 +484,8 @@ function OnGameEvent_player_now_it( params )
 	if ( !attacker || !victim )
 		return;
 
-	if ( attacker.IsSurvivor() && victim.GetZombieType() == ZOMBIE_TANK )
+	if ( attacker.IsSurvivor() && victim.GetZombieType() == ZOMBIE_TANK && !(victim in SessionState.TanksBiled) )
 	{
-		if ( victim in SessionState.TanksBiled )
-			return;
-
-		victim.SetFriction( 2.0 );
 		SessionState.TanksBiled.rawset( victim, attacker );
 		if ( SessionState.TanksBiled.len() == 1 )
 			SessionState.BileHurtTankThink = true;
@@ -495,7 +501,6 @@ function OnGameEvent_player_no_longer_it( params )
 
 	if ( victim.GetZombieType() == ZOMBIE_TANK && victim in SessionState.TanksBiled )
 	{
-		victim.SetFriction( 1.0 );
 		SessionState.TanksBiled.rawdelete( victim );
 		if ( SessionState.TanksBiled.len() == 0 )
 			SessionState.BileHurtTankThink = false;
@@ -564,8 +569,8 @@ function TankRunThink()
 		SpawnTankThink();
 	if ( SessionState.TriggerRescueThink )
 		TriggerRescueThink();
-	if ( SessionState.InWaterTankThink )
-		InWaterTankThink();
+	if ( SessionState.TankSpeedThink ) //stale check right now
+		TankSpeedThink();
 	if ( SessionState.BileHurtTankThink )
 		BileHurtTankThink();
 	if ( SessionState.CheckPrimaryWeaponThink )
