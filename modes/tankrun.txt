@@ -28,7 +28,6 @@
 		tank_burn_duration 20
 		tank_burn_duration_expert 30
 		tank_burn_duration_hard 25
-		vomitjar_duration_infected_bot 10
 		z_tank_incapacitated_health 0
 		z_tank_throw_interval 999999
 		tank_swing_interval 3
