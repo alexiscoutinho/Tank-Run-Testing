@@ -3,6 +3,7 @@ MapState <-
 	TankModelsBase = [ "models/infected/hulk.mdl", "models/infected/hulk_l4d1.mdl" ]
 }
 
+local oldTankLimit;
 local TrainCarTankSpawn = false;
 
 function OnSpawnZombie()
@@ -21,7 +22,8 @@ function OnSpawnZombie()
 	}
 
 	local numTanks = SessionState.Tanks.len();
-	if ( numTanks >= SessionOptions.cm_TankLimit )
+	oldTankLimit = SessionOptions.cm_TankLimit;
+	if ( numTanks >= oldTankLimit )
 		SessionOptions.cm_TankLimit = numTanks + 1;
 
 	TrainCarTankSpawn = true;
@@ -51,6 +53,6 @@ function OnGameEvent_tank_spawn( params )
 	tank.SetMaxHealth( SessionState.TankHealth * 1.25 );
 	tank.SetHealth( SessionState.TankHealth * 1.25 );
 
-	SessionOptions.cm_TankLimit = 8;
+	SessionOptions.cm_TankLimit = oldTankLimit;
 	TrainCarTankSpawn = false;
 }

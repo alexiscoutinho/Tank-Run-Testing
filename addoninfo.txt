@@ -2,7 +2,7 @@ AddonInfo
 {
 	addonSteamAppID		550
 	addonTitle			"Tank Run Testing Initiative"
-	addonVersion		2.1
+	addonVersion		2.2
 	addonAuthor			"Jugger and Jack Bauer ︻デ▬——"
 	addonAuthorSteamID	76561198844371004
 	addonURL0			https://steamcommunity.com/sharedfiles/filedetails/3080878542

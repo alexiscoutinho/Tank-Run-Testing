@@ -15,22 +15,12 @@ MutationOptions <-
 	cm_InfiniteFuel = true
 	cm_AllowPillConversion = false
 	cm_CommonLimit = 0
-	cm_DominatorLimit = 0
 	cm_MaxSpecials = 0
+	cm_WitchLimit = 0
+	cm_TankLimit = 8
 	cm_ProhibitBosses = true
 	cm_AggressiveSpecials = true
 
-	BoomerLimit = 0
-	SmokerLimit = 0
-	HunterLimit = 0
-	ChargerLimit = 0
-	SpitterLimit = 0
-	JockeyLimit = 0
-	cm_WitchLimit = 0
-	cm_TankLimit = 8//should I let this be configurable?
-
-	MobMinSize = 0
-	MobMaxSize = 0
 	NoMobSpawns = true
 	EscapeSpawnTanks = false
 
@@ -77,7 +67,7 @@ MutationState <-
 	DoubleTanks = false
 	Tanks = {}
 	TanksBiled = {}
-	TanksDisabled = false//cant I just use the think toggle?
+	TanksDisabled = false
 	TankHealth = 4000
 	TankSpeedThink = true
 	BileHurtTankThink = false
@@ -145,9 +135,8 @@ if ( IsMissionFinalMap() )
 
 	function OnGameEvent_finale_start( params )
 	{
-		if ( g_MapName == "c6m3_port" )
+		if ( g_MapName == "c6m3_port" || g_MapName == "c11m5_runway" )
 		{
-			SessionOptions.cm_TankLimit = 8;
 			SessionState.TanksDisabled = false;
 			SessionState.SpawnTankThink = true;
 		}
@@ -166,9 +155,8 @@ if ( IsMissionFinalMap() )
 
 	function OnGameEvent_gauntlet_finale_start( params )
 	{
-		if ( g_MapName == "c5m5_bridge" || g_MapName == "c13m4_cutthroatcreek" )
+		if ( g_MapName == "c5m5_bridge" )
 		{
-			SessionOptions.cm_TankLimit = 8;
 			SessionState.TanksDisabled = false;
 			SessionState.SpawnTankThink = true;
 		}
@@ -250,9 +238,6 @@ function TriggerRescueThink()
 
 function SpawnTankThink()
 {
-	if ( SessionOptions.cm_TankLimit <= 0 )
-		return;
-
 	if ( (SessionState.Tanks.len() < SessionOptions.cm_TankLimit) && ((Time() - SessionState.LastSpawnTime) >= SessionState.SpawnInterval || SessionState.LastSpawnTime == 0) )
 	{
 		if ( ZSpawn( { type = 8 } ) )
@@ -304,7 +289,7 @@ function LeftSafeAreaThink()
 	}
 }
 
-function TankSpeedThink()
+function TankSpeedThink()//what if a custom map wants a faster tank?
 {
 	foreach ( tank in SessionState.Tanks )
 	{
@@ -419,11 +404,8 @@ function OnGameEvent_round_start( params )
 	for ( local ammo; ammo = Entities.FindByModel( ammo, "models/props/terror/ammo_stack.mdl" ); )
 		ammo.Kill();
 
-	if ( g_MapName == "c5m5_bridge" || g_MapName == "c6m3_port" || g_MapName == "c13m4_cutthroatcreek" )
-	{
-		SessionOptions.cm_TankLimit = 0;
+	if ( g_MapName == "c5m5_bridge" || g_MapName == "c6m3_port" || g_MapName == "c11m5_runway" )
 		SessionState.TanksDisabled = true;
-	}
 
 	CheckDifficultyForTankHealth( GetDifficulty() );
 	EntFire( "worldspawn", "RunScriptCode", "g_ModeScript.TankRunThink()", 1.0 );
@@ -578,7 +560,7 @@ function TankRunThink()
 		CheckPrimaryWeaponThink();
 		SessionState.CheckPrimaryWeaponThink = false;
 	}
-	if ( Director.GetCommonInfectedCount() > 0 )
+	if ( Director.GetCommonInfectedCount() > 0 )//why only remove commons?
 	{
 		for ( local infected; infected = Entities.FindByClassname( infected, "infected" ); )
 			infected.Kill();

@@ -1,3 +1,4 @@
+local oldTankLimit;
 local ChurchGuySpawn = false;
 
 function OnSpawnZombie()
@@ -16,7 +17,8 @@ function OnSpawnZombie()
 	}
 
 	local numTanks = SessionState.Tanks.len();
-	if ( numTanks >= SessionOptions.cm_TankLimit )
+	oldTankLimit = SessionOptions.cm_TankLimit;
+	if ( numTanks >= oldTankLimit )
 		SessionOptions.cm_TankLimit = numTanks + 1;
 
 	ChurchGuySpawn = true;
@@ -45,7 +47,7 @@ function OnGameEvent_tank_spawn( params ) // assuming OnGameEvents are run in th
 			tank.SetMaxHealth( SessionState.TankHealth / 4 );
 			tank.SetHealth( SessionState.TankHealth / 4 );
 
-			SessionOptions.cm_TankLimit = 8;
+			SessionOptions.cm_TankLimit = oldTankLimit;
 			ChurchGuySpawn = false;
 		}
 	}
