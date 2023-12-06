@@ -80,10 +80,7 @@ MutationState <-
 
 if ( IsMissionFinalMap() )
 {
-	MutationOptions.ShouldPlayBossMusic <- function ( idx )
-	{
-		return true;
-	}
+	MutationOptions.ShouldPlayBossMusic <- @( idx ) true;
 
 	local triggerFinale = Entities.FindByClassname( null, "trigger_finale" );
 	if ( triggerFinale )
@@ -110,7 +107,13 @@ if ( IsMissionFinalMap() )
 		{
 			Fields =
 			{
-				rescue_time = { slot = HUD_MID_TOP, name = "rescue", special = HUD_SPECIAL_TIMER0, flags = HUD_FLAG_COUNTDOWN_WARN | HUD_FLAG_BEEP | HUD_FLAG_ALIGN_CENTER | HUD_FLAG_NOTVISIBLE },
+				rescue_time =
+				{
+					slot = HUD_MID_TOP
+					name = "rescue"
+					special = HUD_SPECIAL_TIMER0
+					flags = HUD_FLAG_COUNTDOWN_WARN | HUD_FLAG_BEEP | HUD_FLAG_ALIGN_CENTER | HUD_FLAG_NOTVISIBLE
+				}
 			}
 		}
 		HUDSetLayout( TankRunHUD );
@@ -167,7 +170,7 @@ if ( IsMissionFinalMap() )
 		SessionState.SpawnTankThink = false;
 	}
 
-	function OnForceFinaleStart() // because of https://github.com/Tsuey/L4D2-Community-Update/issues/462
+	function InputForceFinaleStart() // because of https://github.com/Tsuey/L4D2-Community-Update/issues/462
 	{
 		const FINALE = 64;
 
@@ -236,9 +239,10 @@ function TriggerRescueThink()
 	}
 }
 
-function SpawnTankThink()
-{
-	if ( (SessionState.Tanks.len() < SessionOptions.cm_TankLimit) && ((Time() - SessionState.LastSpawnTime) >= SessionState.SpawnInterval || SessionState.LastSpawnTime == 0) )
+function SpawnTankThink()//finale stage tanks still spawn it seems
+{//deal with unlimited tanks (-1)
+	if ( SessionState.Tanks.len() < SessionOptions.cm_TankLimit && (Time() - SessionState.LastSpawnTime >= SessionState.SpawnInterval
+		|| SessionState.LastSpawnTime == 0) )
 	{
 		if ( ZSpawn( { type = 8 } ) )
 		{
@@ -267,7 +271,7 @@ function ReleaseTriggerMultiples()
 		if ( triggerFinale )
 		{
 			triggerFinale.ValidateScriptScope();
-			triggerFinale.GetScriptScope().InputForceFinaleStart <- OnForceFinaleStart;
+			triggerFinale.GetScriptScope().InputForceFinaleStart <- InputForceFinaleStart;
 		}
 	}
 }
@@ -313,9 +317,7 @@ function TankSpeedThink()//what if a custom map wants a faster tank?
 function BileHurtTankThink()
 {
 	foreach ( tank, survivor in SessionState.TanksBiled )
-	{
 		tank.TakeDamage( 100, 0, survivor );
-	}
 }
 
 function CheckDifficultyForTankHealth( difficulty )
@@ -381,7 +383,14 @@ if ( Director.IsFirstMapInScenario() )
 
 		local w = [ "any_smg", "tier1_shotgun" ];
 		for ( local i = 0; i < 2; i++ )
-			SpawnEntityFromTable( "weapon_spawn", { spawn_without_director = 1, weapon_selection = w[i], count = 5, spawnflags = 3, origin = (startArea.FindRandomSpot() + Vector(0,0,50)), angles = Vector(RandomInt(0,90),RandomInt(0,90),90) } );
+			SpawnEntityFromTable( "weapon_spawn", {
+				spawn_without_director = 1
+				weapon_selection = w[i]
+				count = 5
+				spawnflags = 3
+				origin = startArea.FindRandomSpot() + Vector( 0, 0, 50 )
+				angles = Vector( RandomInt( 0, 90 ), RandomInt( 0, 90 ), 90 )
+			} );
 	}
 
 	function OnGameplayStart()
@@ -401,8 +410,42 @@ function OnGameEvent_round_start( params )
 		else
 			spawner.Kill();
 	}
+
 	for ( local ammo; ammo = Entities.FindByModel( ammo, "models/props/terror/ammo_stack.mdl" ); )
 		ammo.Kill();
+
+	local filter_survivor;
+	for ( local filter; filter = Entities.FindByClassname( filter, "filter_activator_team" ); )
+	{
+		if ( NetProps.GetPropInt( filter, "m_iFilterTeam" ) == 2 )
+		{
+			filter_survivor = filter.GetName();
+			break;
+		}
+	}
+	if ( filter_survivor )
+	{
+		for ( local trigger, spawnflags; trigger = Entities.FindByClassname( trigger, "trigger_playermovement" ); )
+		{
+			spawnflags = NetProps.GetPropInt( trigger, "m_spawnflags" );
+
+			if ( NetProps.GetPropString( trigger, "m_iFilterName" ) == filter_survivor && spawnflags & 4096 ) // Auto-walk while in trigger
+			{
+				SpawnEntityFromTable( "trigger_playermovement", { // because just changing filter doesn't work
+					model = trigger.GetModelName()
+					vscripts = NetProps.GetPropString( trigger, "m_iszVScripts" )
+					thinkfunction = trigger.GetScriptId()
+					targetname = trigger.GetName()
+					StartDisabled = NetProps.GetPropInt( trigger, "m_bDisabled" )
+					spawnflags = spawnflags
+					parentname = NetProps.GetPropString( trigger, "m_iParent" ) // presumably faster than trigger.GetMoveParent().GetName() //does direct handle work though? getname method works with parents set by Input
+					origin = trigger.GetOrigin()
+					globalname = NetProps.GetPropString( trigger, "m_iGlobalname" )
+				} ); // I/Os missing and possibly more. Needs more thorough testing in general.
+				trigger.Kill();
+			}
+		}
+	}
 
 	if ( g_MapName == "c5m5_bridge" || g_MapName == "c6m3_port" || g_MapName == "c11m5_runway" )
 		SessionState.TanksDisabled = true;
@@ -491,7 +534,8 @@ function OnGameEvent_player_no_longer_it( params )
 
 function OnGameEvent_triggered_car_alarm( params )
 {
-	if ( (SessionState.Tanks.len() < SessionOptions.cm_TankLimit) && ((Time() - SessionState.LastAlarmTankTime) >= SessionState.SpawnInterval || SessionState.LastAlarmTankTime == 0) )
+	if ( SessionState.Tanks.len() < SessionOptions.cm_TankLimit && (Time() - SessionState.LastAlarmTankTime >= SessionState.SpawnInterval
+		|| SessionState.LastAlarmTankTime == 0) )
 	{
 		if ( ZSpawn( { type = 8 } ) )
 			SessionState.LastAlarmTankTime = Time();
@@ -561,7 +605,7 @@ function TankRunThink()
 		SessionState.CheckPrimaryWeaponThink = false;
 	}
 	if ( Director.GetCommonInfectedCount() > 0 )//why only remove commons?
-	{
+	{// because CI and SI limits are permeable
 		for ( local infected; infected = Entities.FindByClassname( infected, "infected" ); )
 			infected.Kill();
 	}

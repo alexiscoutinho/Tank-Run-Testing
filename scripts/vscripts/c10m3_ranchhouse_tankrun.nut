@@ -1,7 +1,7 @@
 local oldTankLimit;
 local ChurchGuySpawn = false;
 
-function OnSpawnZombie()
+function InputSpawnZombie()
 {
 	local numplayers = 0;
 	for ( local player; player = Entities.FindByClassname( player, "player" ); )
@@ -32,7 +32,7 @@ function OnGameEvent_round_start_post_nav( params )
 	NetProps.SetPropString( spawner, "m_szPopulation", "tank" );
 
 	spawner.ValidateScriptScope();
-	spawner.GetScriptScope().InputSpawnZombie <- OnSpawnZombie;
+	spawner.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
 
 	//substitute zombie with tank sounds
 }

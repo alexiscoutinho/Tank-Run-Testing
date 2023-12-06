@@ -6,7 +6,7 @@ MapState <-
 local oldTankLimit;
 local TrainCarTankSpawn = false;
 
-function OnSpawnZombie()
+function InputSpawnZombie()
 {
 	local numplayers = 0;
 	for ( local player; player = Entities.FindByClassname( player, "player" ); )
@@ -35,7 +35,7 @@ function OnGameEvent_round_start( params )
 	local spawner = Entities.FindByName( null, "spawn_train_tank_coop" );
 
 	spawner.ValidateScriptScope();
-	spawner.GetScriptScope().InputSpawnZombie <- OnSpawnZombie;
+	spawner.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
 }
 
 local func = delete ChallengeScript.OnGameEvent_tank_spawn;
