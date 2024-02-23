@@ -1,6 +1,7 @@
 MapState <-
 {
 	TankModelsBase = [ "models/infected/hulk.mdl", "models/infected/hulk_l4d1.mdl" ]
+	CheckDefaultModel = false
 }
 
 local oldTankLimit;
@@ -30,19 +31,37 @@ function InputSpawnZombie()
 	return true;
 }
 
-function OnGameEvent_round_start( params )
-{
-	local spawner = Entities.FindByName( null, "spawn_train_tank_coop" );
+local TrainCarTankPos;
 
-	spawner.ValidateScriptScope();
-	spawner.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
+function OnGameEvent_round_start_post_nav( params )
+{
+	foreach ( name in [ "button_locked_message", "survivor_brush_blocker" ] )
+		EntFire( name, "Kill" );
+
+	local ent = Entities.FindByName( null, "minifinale_button_unlocker" );
+	EntityOutputs.RemoveOutput( ent, "OnEntireTeamStartTouch", "tankdoorin_button", "Unlock", "" );
+	EntityOutputs.RemoveOutput( ent, "OnEntireTeamStartTouch", "button_locked_message", "Kill", "" );
+	EntityOutputs.RemoveOutput( ent, "OnEntireTeamStartTouch", "survivor_brush_blocker", "Enable", "" );
+	//?"OnEntireTeamStartTouch" "tank_door_clipEnable0-1"
+
+	EntFire( "tankdoorin_button", "Unlock" );
+	EntFire( "tankdoorin_button", "AddOutput", "use_time 2" );
+	ent = Entities.FindByName( null, "tankdoorin_button" );
+	EntityOutputs.RemoveOutput( ent, "OnUseLocked", "button_locked_message", "GenerateGameEvent", "" );
+
+	ent = Entities.FindByName( null, "spawn_train_tank_coop" );
+	ent.ValidateScriptScope();
+	ent.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
+	TrainCarTankPos = ent.GetOrigin();
+
+	EntFire( "tankdoorout_button", "AddOutput", "use_time 2" );
 }
 
 local func = delete ChallengeScript.OnGameEvent_tank_spawn;
 function OnGameEvent_tank_spawn( params )
 {
 	local tank = GetPlayerFromUserID( params["userid"] );
-	if ( !TrainCarTankSpawn || (tank.GetOrigin() - Entities.FindByName( null, "spawn_train_tank_coop" ).GetOrigin()).Length() > 10 )
+	if ( !TrainCarTankSpawn || (tank.GetOrigin() - TrainCarTankPos).Length() > 10 )
 	{
 		func( params );
 		return;

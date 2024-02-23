@@ -58,13 +58,14 @@ MutationState <-
 {
 	TankModelsBase = [ "models/infected/hulk.mdl", "models/infected/hulk_dlc3.mdl", "models/infected/hulk_l4d1.mdl" ]
 	TankModels = []
-	FinaleStarted = false
+	CheckDefaultModel = true
+	HoldoutStarted = false
 	TriggerRescue = false
 	RescueDelay = 600
 	LastAlarmTankTime = 0
 	LastSpawnTime = 0
 	SpawnInterval = 20
-	DoubleTanks = false
+	DoubleTanks = false // for user customization
 	Tanks = {}
 	TanksBiled = {}
 	TanksDisabled = false
@@ -90,7 +91,7 @@ if ( IsMissionFinalMap() )
 		{
 			function OnGameEvent_generator_started( params )
 			{
-				if ( !SessionState.FinaleStarted )
+				if ( !SessionState.HoldoutStarted )
 					return;
 
 				HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - 30 );
@@ -119,7 +120,7 @@ if ( IsMissionFinalMap() )
 		HUDSetLayout( TankRunHUD );
 	}
 
-	if ( MutationState.FinaleType != 4 )
+	if ( MutationState.FinaleType == 0 || MutationState.FinaleType == 2 )
 	{
 		function GetNextStage()
 		{
@@ -128,7 +129,7 @@ if ( IsMissionFinalMap() )
 				SessionOptions.ScriptedStageType = STAGE_ESCAPE;
 				return;
 			}
-			if ( SessionState.FinaleStarted )
+			if ( SessionState.HoldoutStarted )
 			{
 				SessionOptions.ScriptedStageType = STAGE_DELAY;
 				SessionOptions.ScriptedStageValue = -1;
@@ -152,7 +153,7 @@ if ( IsMissionFinalMap() )
 
 		SessionState.DoubleTanks = true;
 		SessionState.SpawnInterval *= 2;
-		SessionState.FinaleStarted = true;
+		SessionState.HoldoutStarted = true;
 		SessionState.TriggerRescueThink = true;
 	}
 
@@ -554,24 +555,24 @@ function OnGameEvent_tank_spawn( params )
 	tank.SetHealth( SessionState.TankHealth );
 	local modelName = tank.GetModelName();
 
-	if ( SessionState.TankModelsBase.len() == 0 )
-		SessionState.TankModelsBase.append( modelName );
+	if ( SessionState.CheckDefaultModel )
+	{
+		SessionState.CheckDefaultModel = false;
+
+		if ( SessionState.TankModelsBase.find( modelName ) == null )
+			SessionState.TankModelsBase.append( modelName );
+	}
 
 	local tankModels = SessionState.TankModels;
 	if ( tankModels.len() == 0 )
 		tankModels.extend( SessionState.TankModelsBase );
-	local foundModel = tankModels.find( modelName );
-	if ( foundModel != null )
-	{
-		tankModels.remove( foundModel );
-		return;
-	}
 
 	local randomElement = RandomInt( 0, tankModels.len() - 1 );
 	local randomModel = tankModels[randomElement];
 	tankModels.remove( randomElement );
 
-	tank.SetModel( randomModel );
+	if ( randomModel != modelName )
+		tank.SetModel( randomModel );
 }
 
 function OnGameEvent_tank_killed( params )
@@ -583,7 +584,7 @@ function OnGameEvent_tank_killed( params )
 	if ( SessionState.TanksBiled.len() == 0 )
 		SessionState.BileHurtTankThink = false;
 
-	if ( SessionState.FinaleStarted )
+	if ( SessionState.HoldoutStarted )
 		HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - 10 );
 }
 
@@ -606,8 +607,7 @@ function TankRunThink()
 	}
 	if ( Director.GetCommonInfectedCount() > 0 )//why only remove commons?
 	{// because CI and SI limits are permeable
-		for ( local infected; infected = Entities.FindByClassname( infected, "infected" ); )
-			infected.Kill();
+		EntFire( "infected", "Kill" );
 	}
 	EntFire( "worldspawn", "RunScriptCode", "g_ModeScript.TankRunThink()", 1.0 );
 }
