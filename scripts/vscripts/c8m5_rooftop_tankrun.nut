@@ -1,0 +1,4 @@
+MapState <-
+{
+	SpawnInterval = 35
+}

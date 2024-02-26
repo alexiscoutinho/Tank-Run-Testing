@@ -1,5 +1,5 @@
 MapState <-
 {
 	RescueDelay = 480
-	SpawnInterval = 25
+	HoldoutSpawnInterval = 50
 }
