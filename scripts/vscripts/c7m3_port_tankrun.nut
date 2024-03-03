@@ -6,7 +6,7 @@ function GeneratorButtonPressed()
     EntFire( "generator_start_model", "ForceFinaleStart" )
 }
 
-function OnGameEvent_round_start_post_nav( params )
+function OnGameEvent_round_start( params )
 {
 	local relay = Entities.FindByName( null, "relay_finale_script_event" );
 

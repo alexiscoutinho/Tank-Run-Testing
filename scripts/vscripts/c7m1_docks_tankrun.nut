@@ -1,6 +1,6 @@
 MapState <-
 {
-	TankModelsBase = [ "models/infected/hulk.mdl", "models/infected/hulk_l4d1.mdl" ]
+	BaseTankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_l4d1.mdl" ]
 	CheckDefaultModel = false
 }
 
@@ -33,7 +33,7 @@ function InputSpawnZombie()
 
 local TrainCarTankPos;
 
-function OnGameEvent_round_start_post_nav( params )
+function OnGameEvent_round_start( params )
 {
 	foreach ( name in [ "button_locked_message", "survivor_brush_blocker" ] )
 		EntFire( name, "Kill" );
@@ -67,7 +67,7 @@ function OnGameEvent_tank_spawn( params )
 		return;
 	}
 
-	SessionState.Tanks.rawset( tank, tank );
+	SessionState.Tanks.rawset( tank, tank );//what about injecting params to make default func skip actions?
 
 	tank.SetMaxHealth( SessionState.TankHealth * 1.25 );
 	tank.SetHealth( SessionState.TankHealth * 1.25 );

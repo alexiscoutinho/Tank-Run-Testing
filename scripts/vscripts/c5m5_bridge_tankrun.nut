@@ -1,0 +1,4 @@
+MapState <-
+{
+	StartDisabled = true
+}
