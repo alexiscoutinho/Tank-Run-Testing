@@ -25,16 +25,23 @@ function InputSpawnZombie()
 	return true;
 }
 
+local ChurchGuyPos;
+
 function OnGameEvent_round_start_post_nav( params )
 {
-	local spawner = Entities.FindByName( null, "spawn_church_zombie" );
+	local ent = Entities.FindByName( null, "relay_enable_chuch_zombie_loop" );
+	EntityOutputs.AddOutput( ent, "OnTrigger", "!self", "RunScriptCode", "SessionState.SpawnInterval = 30", 0.0, 1 );
 
-	NetProps.SetPropString( spawner, "m_szPopulation", "tank" );
+	ent = Entities.FindByName( null, "spawn_church_zombie" );
+	NetProps.SetPropString( ent, "m_szPopulation", "tank" );
+	ent.ValidateScriptScope();
+	ent.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
+	ChurchGuyPos = ent.GetOrigin();
 
-	spawner.ValidateScriptScope();
-	spawner.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
+	//substitute zombie with tank sounds (put between relay and spawner?)
 
-	//substitute zombie with tank sounds
+	for ( local prop; prop = Entities.FindByModel( prop, "models/props/cs_office/file_cabinet2.mdl" ); )
+		DoEntFire( "!self", "AddOutput", "nodamageforces 1", 0.0, null, prop );
 }
 
 function OnGameEvent_tank_spawn( params ) // assuming OnGameEvents are run in the order they are registered
@@ -42,7 +49,7 @@ function OnGameEvent_tank_spawn( params ) // assuming OnGameEvents are run in th
 	if ( ChurchGuySpawn )
 	{
 		local tank = GetPlayerFromUserID( params["userid"] );
-		if ( (tank.GetOrigin() - Entities.FindByName( null, "spawn_church_zombie" ).GetOrigin()).Length() < 1 )
+		if ( (tank.GetOrigin() - ChurchGuyPos).Length() < 1 )
 		{
 			tank.SetMaxHealth( SessionState.TankHealth / 4 );
 			tank.SetHealth( SessionState.TankHealth / 4 );

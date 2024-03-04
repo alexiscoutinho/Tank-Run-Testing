@@ -59,6 +59,8 @@ MutationState <-
 	BaseTankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_dlc3.mdl", "models/infected/hulk_l4d1.mdl" ]
 	CheckDefaultModel = true
 	CheckSurvivorsInFinaleArea = true
+	HoldoutStarted = false
+	HoldoutEnded = false
 	RescueDelay = 600
 	SpawnInterval = 20
 	HoldoutSpawnInterval = 40
@@ -73,8 +75,6 @@ MutationState <-
 local InternalState =
 {
 	TankModels = []
-	HoldoutStarted = false
-	HoldoutEnded = false
 	LastSpawnTime = 0
 	LastAlarmTankTime = 0
 	BiledTanks = {}
@@ -208,12 +208,12 @@ if ( IsMissionFinalMap() || triggerFinale )
 
 	function GetNextStage()
 	{
-		if ( InternalState.HoldoutEnded )
+		if ( SessionState.HoldoutEnded )
 		{
 			SessionOptions.ScriptedStageType = STAGE_ESCAPE;
 			return;
 		}
-		if ( InternalState.HoldoutStarted )
+		if ( SessionState.HoldoutStarted )
 		{
 			SessionOptions.ScriptedStageType = STAGE_DELAY;
 			SessionOptions.ScriptedStageValue = -1;
@@ -225,7 +225,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 		if ( HUDReadTimer( 0 ) <= 0 )
 		{
 			InternalState.EndHoldoutThink = false;
-			InternalState.HoldoutEnded = true;
+			SessionState.HoldoutEnded = true;
 			Director.ForceNextStage();
 
 			TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags | HUD_FLAG_NOTVISIBLE;
@@ -284,7 +284,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 		{
 			function OnGameEvent_generator_started( params )
 			{
-				if ( !InternalState.HoldoutStarted )
+				if ( !SessionState.HoldoutStarted )
 					return;
 
 				HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - 30 );
@@ -310,7 +310,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 		TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags & ~HUD_FLAG_NOTVISIBLE;
 
 		SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
-		InternalState.HoldoutStarted = true;
+		SessionState.HoldoutStarted = true;
 		InternalState.EndHoldoutThink = true;
 	}
 
@@ -403,7 +403,7 @@ function SpawnTankThink()//finale stage tanks still spawn it seems
 	{
 		if ( ZSpawn( { type = 8 } ) )
 		{
-			if ( InternalState.HoldoutStarted )
+			if ( SessionState.HoldoutStarted )
 				ZSpawn( { type = 8 } );
 			InternalState.LastSpawnTime = Time();
 		}
@@ -557,7 +557,7 @@ function OnGameEvent_tank_killed( params )
 	if ( InternalState.BiledTanks.len() == 0 )
 		InternalState.BileHurtTankThink = false;
 
-	if ( InternalState.HoldoutStarted )
+	if ( SessionState.HoldoutStarted )
 		HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - 10 );
 }
 
