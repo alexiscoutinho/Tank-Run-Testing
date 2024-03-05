@@ -187,49 +187,53 @@ if ( IsMissionFinalMap() || triggerFinale )
 {
 	MutationOptions.ShouldPlayBossMusic <- @( idx ) true;
 
-	TankRunHUD <- {};
-	function SetupModeHUD()
+	local finaleType = NetProps.GetPropInt( triggerFinale, "m_type" );
+	if ( !triggerFinale || finaleType == 0 || finaleType == 2 )
 	{
-		TankRunHUD =
+		TankRunHUD <- {};
+		function SetupModeHUD()
 		{
-			Fields =
+			TankRunHUD =
 			{
-				rescue_time =
+				Fields =
 				{
-					slot = HUD_MID_TOP
-					name = "rescue"
-					special = HUD_SPECIAL_TIMER0
-					flags = HUD_FLAG_COUNTDOWN_WARN | HUD_FLAG_BEEP | HUD_FLAG_ALIGN_CENTER | HUD_FLAG_NOTVISIBLE
+					rescue_time =
+					{
+						slot = HUD_MID_TOP
+						name = "rescue"
+						special = HUD_SPECIAL_TIMER0
+						flags = HUD_FLAG_COUNTDOWN_WARN | HUD_FLAG_BEEP | HUD_FLAG_ALIGN_CENTER | HUD_FLAG_NOTVISIBLE
+					}
 				}
 			}
+			HUDSetLayout( TankRunHUD );
 		}
-		HUDSetLayout( TankRunHUD );
-	}
 
-	function GetNextStage()
-	{
-		if ( SessionState.HoldoutEnded )
+		function GetNextStage()
 		{
-			SessionOptions.ScriptedStageType = STAGE_ESCAPE;
-			return;
+			if ( SessionState.HoldoutEnded )
+			{
+				SessionOptions.ScriptedStageType = STAGE_ESCAPE;
+				return;
+			}
+			if ( SessionState.HoldoutStarted )
+			{
+				SessionOptions.ScriptedStageType = STAGE_DELAY;
+				SessionOptions.ScriptedStageValue = -1;
+			}
 		}
-		if ( SessionState.HoldoutStarted )
-		{
-			SessionOptions.ScriptedStageType = STAGE_DELAY;
-			SessionOptions.ScriptedStageValue = -1;
-		}
-	}
 
-	function EndHoldoutThink()
-	{
-		if ( HUDReadTimer( 0 ) <= 0 )
+		function EndHoldoutThink()
 		{
-			InternalState.EndHoldoutThink = false;
-			SessionState.HoldoutEnded = true;
-			Director.ForceNextStage();
+			if ( HUDReadTimer( 0 ) <= 0 )
+			{
+				InternalState.EndHoldoutThink = false;
+				SessionState.HoldoutEnded = true;
+				Director.ForceNextStage();
 
-			TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags | HUD_FLAG_NOTVISIBLE;
-			HUDManageTimers( 0, TIMER_DISABLE, 0 );
+				TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags | HUD_FLAG_NOTVISIBLE;
+				HUDManageTimers( 0, TIMER_DISABLE, 0 );
+			}
 		}
 	}
 
@@ -302,8 +306,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 			ReleaseTriggerMultiples();
 		}
 
-		local triggerFinale = Entities.FindByClassname( null, "trigger_finale" );
-		if ( NetProps.GetPropInt( triggerFinale, "m_type" ) == 4 )
+		if ( finaleType == 4 )
 			return;
 
 		HUDManageTimers( 0, TIMER_COUNTDOWN, SessionState.RescueDelay );
