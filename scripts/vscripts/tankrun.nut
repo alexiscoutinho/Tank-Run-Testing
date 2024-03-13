@@ -3,10 +3,10 @@ Msg("Activating Tank Run\n");
 
 if ( !IsModelPrecached( "models/infected/hulk.mdl" ) )
 	PrecacheModel( "models/infected/hulk.mdl" );
-if ( !IsModelPrecached( "models/infected/hulk_dlc3.mdl" ) )
-	PrecacheModel( "models/infected/hulk_dlc3.mdl" );
 if ( !IsModelPrecached( "models/infected/hulk_l4d1.mdl" ) )
 	PrecacheModel( "models/infected/hulk_l4d1.mdl" );
+if ( !IsModelPrecached( "models/infected/hulk_dlc3.mdl" ) )
+	PrecacheModel( "models/infected/hulk_dlc3.mdl" );
 
 MutationOptions <-
 {
@@ -56,17 +56,16 @@ MutationOptions <-
 
 MutationState <-
 {
-	BaseTankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_dlc3.mdl", "models/infected/hulk_l4d1.mdl" ]
+	TankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_dlc3.mdl", "models/infected/hulk_l4d1.mdl" ]
 	CheckDefaultModel = true
 	CheckSurvivorsInFinaleArea = true
 	HoldoutStarted = false
 	HoldoutEnded = false
 	RescueDelay = 600
+	FirstSpawnDelay = 0
 	SpawnInterval = 20
 	HoldoutSpawnInterval = 40
 	//DoubleTanks = false // degenerate
-	Tanks = {}//not registering a tank may be buggy
-	StartDisabled = false
 	TanksDisabled = false
 	TankHealth = 4000
 	DifficultyHealths = [ 2000, 3000, 4000, 5000 ]
@@ -74,9 +73,9 @@ MutationState <-
 
 local InternalState =
 {
-	TankModels = []
 	LastSpawnTime = 0
 	LastAlarmTankTime = 0
+	Tanks = {}
 	BiledTanks = {}
 	LeftSafeAreaThink = false
 	SpawnTankThink = false
@@ -152,7 +151,7 @@ if ( Director.IsFirstMapInScenario() )
 			} );
 	}
 }
-
+/*
 local director = Entities.FindByClassname( null, "info_director" ); // apparently breaks when there are duplicate entities
 if ( director )
 {
@@ -181,8 +180,8 @@ if ( director )
 		return true;
 	}
 }
-
-local triggerFinale = Entities.FindByClassname( null, "trigger_finale" );
+*/
+local triggerFinale = Entities.FindByClassname( null, "trigger_finale" ), EndHoldoutThink;
 if ( IsMissionFinalMap() || triggerFinale )
 {
 	MutationOptions.ShouldPlayBossMusic <- @( idx ) true;
@@ -223,7 +222,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 			}
 		}
 
-		function EndHoldoutThink()
+		EndHoldoutThink = function ()
 		{
 			if ( HUDReadTimer( 0 ) <= 0 )
 			{
@@ -243,23 +242,20 @@ if ( IsMissionFinalMap() || triggerFinale )
 
 		function OnGameEvent_round_start_post_nav( params )
 		{
-			if ( !("allAreas" in getroottable()) )
+			if ( !("finaleAreas" in getroottable()) )
 			{
-				::allAreas <- {};
+				local allAreas = {};
 				NavMesh.GetAllAreas( allAreas );
 
-				if ( SessionState.CheckSurvivorsInFinaleArea )
+				::finaleAreas <- {};
+				foreach ( area in allAreas )
 				{
-					::finaleAreas <- {};
-					foreach ( area in allAreas )
-					{
-						if ( area.HasSpawnAttributes( FINALE ) )
-							finaleAreas[area] <- true;
-					}
+					if ( area.HasSpawnAttributes( FINALE ) )
+						finaleAreas[area] <- area;
 				}
 			}
 
-			foreach ( area in allAreas )
+			foreach ( area in finaleAreas )
 				area.RemoveSpawnAttributes( FINALE );
 		}
 
@@ -278,7 +274,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 				}
 			}
 
-			foreach ( area in allAreas )
+			foreach ( area in finaleAreas )
 				area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
 			return true;
 		}
@@ -292,7 +288,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 					return;
 
 				HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - 30 );
-				if ( SessionState.Tanks.len() < SessionOptions.cm_TankLimit )
+				if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit )
 					ZSpawn( { type = 8 } );
 			}
 		}
@@ -300,7 +296,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 
 	function OnGameEvent_finale_start( params )
 	{
-		if ( SessionState.StartDisabled )
+		if ( SessionState.FirstSpawnDelay == -1 )
 		{
 			InternalState.SpawnTankThink = true;
 			ReleaseTriggerMultiples();
@@ -319,7 +315,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 
 	function OnGameEvent_gauntlet_finale_start( params )
 	{
-		if ( SessionState.StartDisabled )
+		if ( SessionState.FirstSpawnDelay == -1 )
 		{
 			InternalState.SpawnTankThink = true;
 			ReleaseTriggerMultiples();
@@ -379,7 +375,7 @@ function ReleaseTriggerMultiples()//or Activate/StartTankSpawning? depends if u 
 	}//should I revive modifiedKV to refresh the triggerFinale pointer and enforce that the Input hook exists? so far, no real case exists
 }
 
-function LeftSafeAreaThink()
+local function LeftSafeAreaThink()
 {
 	for ( local player; player = Entities.FindByClassname( player, "player" ); )
 	{
@@ -396,12 +392,12 @@ function LeftSafeAreaThink()
 	}
 }
 
-function SpawnTankThink()//finale stage tanks still spawn it seems
+local function SpawnTankThink()//finale stage tanks still spawn it seems
 {
 	if ( SessionState.TanksDisabled )
 		return;
 
-	if ( (SessionState.Tanks.len() < SessionOptions.cm_TankLimit || SessionOptions.cm_TankLimit == -1)
+	if ( (InternalState.Tanks.len() < SessionOptions.cm_TankLimit || SessionOptions.cm_TankLimit == -1)
 		&& (Time() - InternalState.LastSpawnTime >= SessionState.SpawnInterval || InternalState.LastSpawnTime == 0) )
 	{
 		if ( ZSpawn( { type = 8 } ) )
@@ -413,11 +409,11 @@ function SpawnTankThink()//finale stage tanks still spawn it seems
 	}
 }
 
-function TankSpeedThink()//what if a custom map wants a faster tank?
+local function TankSpeedThink()//what if a custom map wants a faster tank?
 {
-	foreach ( tank in SessionState.Tanks )
+	foreach ( tank in InternalState.Tanks )
 	{
-		if ( tank in InternalState.BiledTanks )
+		if ( InternalState.BiledTanks.rawin( tank ) )
 		{
 			if ( NetProps.GetPropInt( tank, "m_nWaterLevel" ) == 0 )
 				tank.SetFriction( 2.3 );
@@ -434,7 +430,7 @@ function TankSpeedThink()//what if a custom map wants a faster tank?
 	}
 }
 
-function BileHurtTankThink()
+local function BileHurtTankThink()
 {
 	foreach ( tank, survivor in InternalState.BiledTanks )
 		tank.TakeDamage( 100, 0, survivor );
@@ -451,9 +447,6 @@ function OnGameEvent_round_start( params )
 		else
 			spawner.Kill();
 	}
-
-	//for ( local ammo; ammo = Entities.FindByModel( ammo, "models/props/terror/ammo_stack.mdl" ); ) // what about coffee ammo?
-	//	ammo.Kill();
 
 	local filter_survivor;
 	for ( local filter; filter = Entities.FindByClassname( filter, "filter_activator_team" ); )
@@ -499,8 +492,13 @@ function OnGameEvent_difficulty_changed( params )
 
 function OnGameEvent_player_left_safe_area( params )
 {
-	if ( SessionState.StartDisabled )
+	if ( SessionState.FirstSpawnDelay == -1 )
 		return;
+	if ( SessionState.FirstSpawnDelay > 0 )
+	{
+		SessionState.TanksDisabled = true;
+		EntFire( "worldspawn", "RunScriptCode", "SessionState.TanksDisabled = false", SessionState.FirstSpawnDelay );
+	}
 
 	local player = GetPlayerFromUserID( params["userid"] );
 	if ( !player )
@@ -525,28 +523,22 @@ function OnGameEvent_tank_spawn( params )
 	if ( !tank )
 		return;
 
-	SessionState.Tanks.rawset( tank, tank );
-
+	InternalState.Tanks.rawset( tank, tank );
 	tank.SetMaxHealth( SessionState.TankHealth );
 	tank.SetHealth( SessionState.TankHealth );
+
+	local tankModels = SessionState.TankModels;
 	local modelName = tank.GetModelName();
 
 	if ( SessionState.CheckDefaultModel )
 	{
 		SessionState.CheckDefaultModel = false;
 
-		if ( SessionState.BaseTankModels.find( modelName ) == null )
-			SessionState.BaseTankModels.append( modelName );
+		if ( tankModels.find( modelName ) == null )
+			tankModels.append( modelName );
 	}
 
-	local tankModels = InternalState.TankModels;
-	if ( tankModels.len() == 0 )
-		tankModels.extend( SessionState.BaseTankModels );
-
-	local randomElement = RandomInt( 0, tankModels.len() - 1 );
-	local randomModel = tankModels[randomElement];
-	tankModels.remove( randomElement );
-
+	local randomModel = tankModels[ RandomInt( 0, tankModels.len() - 1 ) ];
 	if ( randomModel != modelName )
 		tank.SetModel( randomModel );
 }
@@ -555,7 +547,7 @@ function OnGameEvent_tank_killed( params )
 {
 	local tank = GetPlayerFromUserID( params["userid"] );
 
-	SessionState.Tanks.rawdelete( tank );
+	InternalState.Tanks.rawdelete( tank );
 	InternalState.BiledTanks.rawdelete( tank );
 	if ( InternalState.BiledTanks.len() == 0 )
 		InternalState.BileHurtTankThink = false;
@@ -572,7 +564,7 @@ function OnGameEvent_player_disconnect( params )
 
 	if ( player.GetZombieType() == ZOMBIE_TANK )
 	{
-		SessionState.Tanks.rawdelete( player );
+		InternalState.Tanks.rawdelete( player );
 		InternalState.BiledTanks.rawdelete( player );
 		if ( InternalState.BiledTanks.len() == 0 )
 			InternalState.BileHurtTankThink = false;
@@ -587,7 +579,7 @@ function OnGameEvent_player_now_it( params )
 	if ( !attacker || !victim )
 		return;
 
-	if ( attacker.IsSurvivor() && victim.GetZombieType() == ZOMBIE_TANK && !(victim in InternalState.BiledTanks) )
+	if ( attacker.IsSurvivor() && victim.GetZombieType() == ZOMBIE_TANK && !InternalState.BiledTanks.rawin( victim ) )
 	{
 		InternalState.BiledTanks.rawset( victim, attacker );
 		if ( InternalState.BiledTanks.len() == 1 )
@@ -602,7 +594,7 @@ function OnGameEvent_player_no_longer_it( params )
 	if ( !victim )
 		return;
 
-	if ( victim.GetZombieType() == ZOMBIE_TANK && victim in InternalState.BiledTanks )
+	if ( victim.GetZombieType() == ZOMBIE_TANK && InternalState.BiledTanks.rawin( victim ) )
 	{
 		InternalState.BiledTanks.rawdelete( victim );
 		if ( InternalState.BiledTanks.len() == 0 )
@@ -612,7 +604,7 @@ function OnGameEvent_player_no_longer_it( params )
 
 function OnGameEvent_triggered_car_alarm( params )
 {
-	if ( SessionState.Tanks.len() < SessionOptions.cm_TankLimit && (Time() - InternalState.LastAlarmTankTime >= SessionState.SpawnInterval
+	if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit && (Time() - InternalState.LastAlarmTankTime >= SessionState.SpawnInterval
 		|| InternalState.LastAlarmTankTime == 0) )
 	{
 		if ( ZSpawn( { type = 8 } ) )

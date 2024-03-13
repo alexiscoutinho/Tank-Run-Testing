@@ -7,7 +7,7 @@ function OnGameEvent_round_start( params )
 	EntFire( "escape_vehicle_ready", "Kill" );
 
 	local ent = Entities.FindByName( null, "finale_elevator" );
-	EntityOutputs.RemoveOutput( ent, "OnFullyOpen", "escape_vehicle_ready", "Add", "1" );
+	EntityOutputs.RemoveOutput( ent, "OnFullyOpen", "escape_vehicle_ready", "", "" );
 	EntityOutputs.AddOutput( ent, "OnFullyOpen", "escape_vehicle_trigger", "Enable", "", 0.0, 1 );
 	EntityOutputs.AddOutput( ent, "OnFullyOpen", "finale_lever", "FinaleEscapeVehicleReadyForSurvivors", "", 0.0, 1 );
 	EntityOutputs.AddOutput( ent, "OnFullyOpen", "van_door", "Break", "", 0.0, 1 );
@@ -15,9 +15,7 @@ function OnGameEvent_round_start( params )
 		ent, "OnFullyOpen", "!self", "RunScriptCode", "SessionState.HoldoutEnded = true; Director.ForceNextStage()", 0.0, 1 );
 
 	ent = Entities.FindByName( null, "finale_lever" );
-	EntityOutputs.RemoveOutput( ent, "FinaleEscapeStarted", "generator_break_timer", "Kill", "" );
-	EntityOutputs.RemoveOutput( ent, "FinaleEscapeStarted", "finale_elevator", "SetSpeed", "11" );
-	EntityOutputs.RemoveOutput( ent, "FinaleEscapeStarted", "escape_vehicle_ready", "Add", "1" );
+	EntityOutputs.RemoveOutput( ent, "FinaleEscapeStarted", "", "", "" );
 }
 
 delete ChallengeScript.OnGameEvent_finale_start;

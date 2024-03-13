@@ -1,4 +1,4 @@
 MapState <-
 {
-	StartDisabled = true
+	FirstSpawnDelay = -1
 }

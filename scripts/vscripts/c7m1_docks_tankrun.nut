@@ -1,6 +1,6 @@
 MapState <-
 {
-	BaseTankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_l4d1.mdl" ]
+	TankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_l4d1.mdl" ]
 	CheckDefaultModel = false
 }
 
@@ -39,15 +39,13 @@ function OnGameEvent_round_start( params )
 		EntFire( name, "Kill" );
 
 	local ent = Entities.FindByName( null, "minifinale_button_unlocker" );
-	EntityOutputs.RemoveOutput( ent, "OnEntireTeamStartTouch", "tankdoorin_button", "Unlock", "" );
-	EntityOutputs.RemoveOutput( ent, "OnEntireTeamStartTouch", "button_locked_message", "Kill", "" );
-	EntityOutputs.RemoveOutput( ent, "OnEntireTeamStartTouch", "survivor_brush_blocker", "Enable", "" );
-	//?"OnEntireTeamStartTouch" "tank_door_clipEnable0-1"
+	EntityOutputs.RemoveOutput( ent, "OnEntireTeamStartTouch", "", "", "" );
+	//?"OnEntireTeamStartTouch" "tank_door_clipEnable0-1" // assuming it is irrelevant in Tank Run and removing
 
 	EntFire( "tankdoorin_button", "Unlock" );
 	EntFire( "tankdoorin_button", "AddOutput", "use_time 2" );
 	ent = Entities.FindByName( null, "tankdoorin_button" );
-	EntityOutputs.RemoveOutput( ent, "OnUseLocked", "button_locked_message", "GenerateGameEvent", "" );
+	EntityOutputs.RemoveOutput( ent, "OnUseLocked", "", "", "" );
 
 	ent = Entities.FindByName( null, "spawn_train_tank_coop" );
 	ent.ValidateScriptScope();
@@ -57,21 +55,19 @@ function OnGameEvent_round_start( params )
 	EntFire( "tankdoorout_button", "AddOutput", "use_time 2" );
 }
 
-local func = delete ChallengeScript.OnGameEvent_tank_spawn;
-function OnGameEvent_tank_spawn( params )
+function OnGameEvent_tank_spawn( params ) // assuming OnGameEvents are run in the order they are registered
 {
-	local tank = GetPlayerFromUserID( params["userid"] );
-	if ( !TrainCarTankSpawn || (tank.GetOrigin() - TrainCarTankPos).Length() > 10 )
+	if ( TrainCarTankSpawn )
 	{
-		func( params );
-		return;
+		local tank = GetPlayerFromUserID( params["userid"] );
+		if ( (tank.GetOrigin() - TrainCarTankPos).Length() < 10 )
+		{
+			tank.SetMaxHealth( SessionState.TankHealth * 1.5 );
+			tank.SetHealth( SessionState.TankHealth * 1.5 );
+			tank.SetModel( "models/infected/hulk_dlc3.mdl" );
+
+			SessionOptions.cm_TankLimit = oldTankLimit;
+			TrainCarTankSpawn = false;
+		}
 	}
-
-	SessionState.Tanks.rawset( tank, tank );//what about injecting params to make default func skip actions?
-
-	tank.SetMaxHealth( SessionState.TankHealth * 1.25 );
-	tank.SetHealth( SessionState.TankHealth * 1.25 );
-
-	SessionOptions.cm_TankLimit = oldTankLimit;
-	TrainCarTankSpawn = false;
 }

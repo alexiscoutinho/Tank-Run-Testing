@@ -10,8 +10,6 @@ function OnGameEvent_round_start( params )
 {
 	local relay = Entities.FindByName( null, "relay_finale_script_event" );
 
-	EntityOutputs.RemoveOutput(
-		relay, "OnTrigger", "@director", "RunScriptCode", "DirectorScript.MapScript.LocalScript.GeneratorButtonPressed()" );
-	EntityOutputs.AddOutput(
-		relay, "OnTrigger", "@director", "RunScriptCode", "DirectorScript.MapScript.GeneratorButtonPressed()", 0.0, 1 );
+	EntityOutputs.RemoveOutput( relay, "OnTrigger", "", "", "" );
+	EntityOutputs.AddOutput( relay, "OnTrigger", "@director", "RunScriptCode", "g_MapScript.GeneratorButtonPressed()", 0.0, 1 );
 }

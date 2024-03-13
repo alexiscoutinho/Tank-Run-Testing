@@ -1,4 +1,4 @@
-function OnGameEvent_round_start_post_nav( params )
+function OnGameEvent_round_start( params )
 {
 	local wall;
 	foreach ( model in [ "*260", "*264", "*265", "*266", "*290" ] )
