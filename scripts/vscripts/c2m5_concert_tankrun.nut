@@ -23,7 +23,11 @@ function OnGameEvent_round_start_post_nav( params )
 function OnGameEvent_round_start( params )
 {
 	for ( local ammo; ammo = Entities.FindByModel( ammo, "models/props/terror/ammo_stack.mdl" ); )
+	{
+		if ( ammo.GetClassname() == "weapon_ammo_spawn" )
+			SpawnEntityFromTable( "upgrade_laser_sight", { origin = ammo.GetOrigin() } ); // port other non zero KVs?
 		ammo.Kill();
+	}
 }
 
 function OnGameEvent_player_left_safe_area( params )
