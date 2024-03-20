@@ -122,7 +122,7 @@ local function SpawnTankThink()//finale stage tanks still spawn it seems
 	if ( (InternalState.Tanks.len() < SessionOptions.cm_TankLimit || SessionOptions.cm_TankLimit == -1)
 		&& (Time() - InternalState.LastSpawnTime >= SessionState.SpawnInterval || InternalState.LastSpawnTime == 0) )
 	{
-		if ( ZSpawn( { type = 8 } ) )
+		if ( ZSpawn( { type = 8 } ) )//lock safe room door when players are still loading
 		{
 			if ( SessionState.HoldoutStarted )
 				ZSpawn( { type = 8 } );
@@ -296,10 +296,17 @@ if ( IsMissionFinalMap() || triggerFinale )
 			}
 		}
 
-		TankRunHUD <- {};
+		function DecreaseHUDTimerBy( time )
+		{
+			HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - time );
+			TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags | HUD_FLAG_BLINK;
+			EntFire( "worldspawn", "RunScriptCode",
+				"local field = g_ModeScript.TankRunHUD.Fields.rescue_time; field.flags = field.flags & ~HUD_FLAG_BLINK", 1.5 );
+		}
+
 		function SetupModeHUD()
 		{
-			TankRunHUD =
+			TankRunHUD <-
 			{
 				Fields =
 				{
@@ -308,10 +315,11 @@ if ( IsMissionFinalMap() || triggerFinale )
 						slot = HUD_MID_TOP
 						name = "rescue"
 						special = HUD_SPECIAL_TIMER0
-						flags = HUD_FLAG_COUNTDOWN_WARN | HUD_FLAG_BEEP | HUD_FLAG_ALIGN_CENTER | HUD_FLAG_NOTVISIBLE
+						flags = HUD_FLAG_NOTVISIBLE/* | HUD_FLAG_ALIGN_CENTER*/ | HUD_FLAG_COUNTDOWN_WARN | HUD_FLAG_BEEP
 					}
 				}
 			}
+			HUDPlace( HUD_MID_TOP, 0.45, 0.03, 0.1, 0.04 );
 			HUDSetLayout( TankRunHUD );
 		}
 
@@ -345,7 +353,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 				foreach ( area in allAreas )
 				{
 					if ( area.HasSpawnAttributes( FINALE ) )
-						finaleAreas[area] <- area;
+						finaleAreas.rawset( area, area );
 				}
 			}
 
@@ -381,7 +389,8 @@ if ( IsMissionFinalMap() || triggerFinale )
 				if ( !SessionState.HoldoutStarted )
 					return;
 
-				HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - 30 );
+				DecreaseHUDTimerBy( 30 );
+
 				if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit )
 					ZSpawn( { type = 8 } );
 			}
@@ -450,7 +459,7 @@ else
 		}
 	}
 
-	local function OnFullyClosed()
+	function OnFullyClosed()
 	{
 		for ( local player; player = Entities.FindByClassname( player, "player" ); )
 		{
@@ -464,15 +473,9 @@ else
 		}
 	}
 
-	for ( local door; door = Entities.FindByClassname( door, "prop_door_rotating_checkpoint" ); )
+	function OnOpen()
 	{
-		if ( GetFlowPercentForPosition( door.GetOrigin(), false ) > 50 ) // must use conservative flow cutoff because of multi-ending maps
-		{
-			door.ValidateScriptScope();
-			door.GetScriptScope().OnFullyClosed <- OnFullyClosed; // poor compatibility name
-			door.ConnectOutput( "OnFullyClosed", "OnFullyClosed" );
-			EntityOutputs.AddOutput( door, "OnFullyOpen", "!self", "RunScriptCode", "InternalState.SafeRoomAbandonThink = false", 0.0, -1 );
-		}
+		InternalState.SafeRoomAbandonThink = false;
 	}
 }
 
@@ -550,6 +553,15 @@ function OnGameEvent_round_start( params )
 		}
 	}
 
+	for ( local door, scope; door = Entities.FindByClassname( door, "prop_door_rotating_checkpoint" ); )
+	{
+		if ( GetFlowPercentForPosition( door.GetOrigin(), false ) > 50 ) // must use conservative flow cutoff because of multi-ending maps
+		{
+			EntityOutputs.AddOutput( door, "OnFullyClosed", "!self", "RunScriptCode", "g_ModeScript.OnFullyClosed()", 0.0, -1 );
+			EntityOutputs.AddOutput( door, "OnOpen", "!self", "RunScriptCode", "g_ModeScript.OnOpen()", 0.0, -1 );
+		}
+	}
+
 	local filter_survivor;
 	for ( local filter; filter = Entities.FindByClassname( filter, "filter_activator_team" ); )
 	{
@@ -586,7 +598,9 @@ function OnGameEvent_round_start( params )
 		}
 	}
 
-	Entities.First().GetScriptScope().TankRunThink <- TankRunThink; // this entity's scope is pre-validated apparently
+	local worldspawn = Entities.First();
+	worldspawn.ValidateScriptScope();
+	worldspawn.GetScriptScope().TankRunThink <- TankRunThink.bindenv( this );
 	EntFire( "worldspawn", "CallScriptFunction", "TankRunThink", 1.0 );
 }
 
@@ -658,7 +672,7 @@ function OnGameEvent_tank_killed( params )
 		InternalState.BileHurtTankThink = false;
 
 	if ( SessionState.HoldoutStarted )
-		HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - 10 );
+		DecreaseHUDTimerBy( 10 );
 }
 
 function OnGameEvent_player_disconnect( params )

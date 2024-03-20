@@ -3,7 +3,7 @@ MapState <-
 	HoldoutSpawnInterval = 30
 }
 
-delete ChallengeScript.OnGameEvent_round_start_post_nav;
+ChallengeScript.rawdelete( "OnGameEvent_round_start_post_nav" );
 function OnGameEvent_round_start_post_nav( params )
 {
 	if ( !("finaleAreas" in getroottable()) )
@@ -15,7 +15,7 @@ function OnGameEvent_round_start_post_nav( params )
 		foreach ( area in allAreas )
 		{
 			if ( area.HasSpawnAttributes( FINALE ) )
-				finaleAreas[area] <- area;
+				finaleAreas.rawset( area, area );
 		}
 	}
 }
@@ -26,6 +26,7 @@ function OnGameEvent_round_start( params )
 	{
 		if ( ammo.GetClassname() == "weapon_ammo_spawn" )
 			SpawnEntityFromTable( "upgrade_laser_sight", { origin = ammo.GetOrigin() } ); // port other non zero KVs?
+
 		ammo.Kill();
 	}
 }

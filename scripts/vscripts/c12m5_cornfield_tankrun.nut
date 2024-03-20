@@ -1,0 +1,4 @@
+MapState <-
+{
+	HoldoutSpawnInterval = 30
+}

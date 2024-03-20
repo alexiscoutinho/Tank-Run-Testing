@@ -19,7 +19,7 @@ function OnGameEvent_round_start_post_nav( params )
 function OnGameEvent_round_start( params )
 {
 	foreach ( name in [
-		"trigger_elevator", "event_elevator_deny", "event_elevator_success", "relay_elevator_up", "push_elevator", "ptemplate_falltrigger"
+		"trigger_elevator", "event_elevator_deny", "event_elevator_success", "relay_elevator_up", "ptemplate_falltrigger"
 	] )//is it bad to remove point_template? cus hurt_fall would be hanging.
 		Entities.FindByName( null, name ).Kill(); // because relay_elevator_up is respawned below
 
@@ -40,13 +40,16 @@ function OnGameEvent_round_start( params )
 			OnTrigger =
 			{
 				cmd1 = "!activatorFireUser10-1"
-				cmd2 = "prop_elevator_gate_bottomSetAnimationclose0.1-1"
-				cmd3 = "sound_elevator_door_bot_closePlaySound0.1-1"
-				cmd4 = "brush_elevator_door_bottomEnable0.6-1"
-				cmd5 = "elevatorMoveToFloortop2.1-1"
-				cmd6 = "shake_elevator_startStartShake2.1-1"
-				cmd7 = "sound_elevator_startupPlaySound2.1-1"
-				cmd8 = "sound_elevator_movePlaySound2.1-1"
+				cmd2 = "push_elevatorEnable0.1-1"
+				cmd3 = "prop_elevator_gate_bottomSetAnimationclose0.1-1"
+				cmd4 = "sound_elevator_door_bot_closePlaySound0.1-1"
+				cmd5 = "brush_elevator_door_bottomEnable0.6-1"
+				cmd6 = "push_elevatorDisable0.61-1"
+				cmd7 = "navblock_elevator_door_bottomBlockNav2.1-1"
+				cmd8 = "elevatorMoveToFloortop2.1-1"
+				cmd9 = "shake_elevator_startStartShake2.1-1"
+				cmd10 = "sound_elevator_startupPlaySound2.1-1"
+				cmd11 = "sound_elevator_movePlaySound2.1-1"
 			}
 		}
 	} );
@@ -61,23 +64,40 @@ function OnGameEvent_round_start( params )
 				cmd2 = "prop_elevator_gate_topSetAnimationclose0.1-1"
 				cmd3 = "sound_elevator_door_top_closePlaySound0.1-1"
 				cmd4 = "brush_elevator_door_topEnable0.6-1"
-				cmd5 = "elevatorMoveToFloorbottom2.1-1"
-				cmd6 = "shake_elevator_startStartShake2.1-1"
-				cmd7 = "sound_elevator_startupPlaySound2.1-1"
-				cmd8 = "sound_elevator_movePlaySound2.1-1"
+				cmd5 = "navblock_elevator_door_topBlockNav2.1-1"
+				cmd6 = "elevatorMoveToFloorbottom2.1-1"
+				cmd7 = "shake_elevator_startStartShake2.1-1"
+				cmd8 = "sound_elevator_startupPlaySound2.1-1"
+				cmd9 = "sound_elevator_movePlaySound2.1-1"
 			}
 		}
 	} );
 
 	EntFire( "brush_elevator_clip_bottom", "AddOutput", "targetname brush_elevator_door_bottom" );
 
+	SpawnEntityFromTable( "script_nav_blocker", {
+		teamToBlock = -1
+		targetname = "navblock_elevator_door_bottom"
+		origin = "-1475 -9550 141.5"
+		extent = "50 50 4"
+	} );
+	SpawnEntityFromTable( "script_nav_blocker", {
+		teamToBlock = -1
+		targetname = "navblock_elevator_door_top"
+		origin = "-1475 -9550 621"
+		extent = "50 50 4"
+	} );
+	EntFire( "navblock_elevator_door_top", "BlockNav" );
+
 	ent = Entities.FindByName( null, "elevator" );
 	EntityOutputs.RemoveOutput( ent, "OnReachedTop", "ptemplate_falltrigger", "", "" );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "relay_elevator_*", "Toggle", "", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "prop_elevator_button", "SetAnimation", "idleoff", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "prop_elevator_callbutton_top", "SetAnimation", "idleoff", 0.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedTop", "navblock_elevator_door_top", "UnblockNav", "", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "button_inelevator", "PressOut", "", 2.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "relay_elevator_*", "Toggle", "", 0.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedBottom", "navblock_elevator_door_bottom", "UnblockNav", "", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_inelevator", "PressOut", "", 2.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_callelevator", "PressOut", "", 2.0, -1 );
 

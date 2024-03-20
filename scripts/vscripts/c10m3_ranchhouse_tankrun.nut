@@ -3,9 +3,13 @@ local ChurchGuySpawn = false;
 
 function InputSpawnZombie()
 {
-	local numplayers = 0;
+	local numplayers = 0, numTanks = 0;
 	for ( local player; player = Entities.FindByClassname( player, "player" ); )
+	{
 		numplayers++;
+		if ( player.GetZombieType() == ZOMBIE_TANK )
+			numTanks++;
+	}
 
 	// since entity indexes from 1 to maxplayers are reserved for player entities
 	local maxplayers = Entities.FindByClassname( null, "cs_team_manager" ).GetEntityIndex() - 1;
@@ -16,7 +20,6 @@ function InputSpawnZombie()
 		return false;
 	}
 
-	local numTanks = SessionState.Tanks.len();
 	oldTankLimit = SessionOptions.cm_TankLimit;
 	if ( numTanks >= oldTankLimit )
 		SessionOptions.cm_TankLimit = numTanks + 1;
@@ -38,8 +41,7 @@ function OnGameEvent_round_start_post_nav( params )
 
 function OnGameEvent_round_start( params )
 {
-	local relay = Entities.FindByName( null, "relay_enable_chuch_zombie_loop" );
-	EntityOutputs.AddOutput( relay, "OnTrigger", "!self", "RunScriptCode", "SessionState.SpawnInterval = 30", 0.0, 1 );
+	EntFire( "relay_enable_chuch_zombie_loop", "AddOutput", "OnTrigger !self:RunScriptCode:SessionState.SpawnInterval = 30:0:1" );
 
 	//substitute zombie with tank sounds
 
