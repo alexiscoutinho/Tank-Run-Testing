@@ -1,6 +1,9 @@
+if ( g_MutaMode != "tankrun" )
+	return
+
 // Testbed for decision-engine (response rules) hookup.
 
-IncludeScript("rulescript_base")
+IncludeScript("rulescript_base_tankrun")
 
 
 // The different kinds of available response
@@ -532,7 +535,7 @@ function rr_ProcessRules( rulesarray )
 		local coderule = RRule( rule.name,
 			rule.criteria.map( rr_ProcessCriterion.bindenv( this ) ),
 			rule.responses.map( rr_ProcessResponse.bindenv( this ) ),
-			"group_params" in rule ? rule.group_params : null  )
+			"group_params" in rule ? rule.group_params : null )
 		// fix up 'rule' in each response
 		foreach ( r in coderule.responses )
 			r.rule = coderule

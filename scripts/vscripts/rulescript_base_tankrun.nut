@@ -71,21 +71,23 @@ class CriterionFunc {
 class RRule {
 	constructor( name, crits, _responses, _group_params = null )
 	{
+		if ( _group_params == null )
+			_group_params = g_rr.RGroupParams()
+
+		// type-check
+		assert( typeof name == "string" )
+		assert( typeof crits == "array" )
+		assert( crits.len() > 0 )
+		assert( typeof _responses == "array" )
+		assert( _responses.len() > 0 )
+		assert( _group_params instanceof g_rr.RGroupParams )
+
 		rulename = name
 		criteria = crits
 		responses = _responses
 		group_params = _group_params
 
-		if ( group_params == null )
-			group_params = g_rr.RGroupParams()
-
-		// type-check
-		assert( typeof rulename == "string" )
-		assert( typeof criteria == "array" )
-		assert( criteria.len() > 0 )
-		assert( typeof responses == "array" )
-		assert( responses.len() > 0 )
-		assert( group_params instanceof g_rr.RGroupParams )
+		criteria.append( g_rr.CriterionFunc( null, SetSpeaker.bindenv( this ) ) )
 
 		// make a shallow copy of selection_state to avoid overwriting shared state
 		// (otherwise changes made in one instance will affect all others)
@@ -93,6 +95,15 @@ class RRule {
 
 		// make an array of one 'false' per response (eg no response has played yet)
 		selection_state.playedresponses <- array( responses.len(), false )
+	}
+
+	function SetSpeaker( query )
+	{
+		if ( "who" in query )
+			speaker = GetPlayerFromCharacter( actor_to_character[query.who] ) // what about duplicate survivors?
+		else if ( "name" in query )
+			speaker = Entities.FindByName( null, query.name )
+		return true
 	}
 
 	function Describe( verbose = true )
@@ -125,13 +136,13 @@ class RRule {
 			local _arr = arr[retval]
 			if ( "params" in _arr )
 			{
-				if ( ("odds" in _arr.params) && !(RandomInt(0, 100) <= _arr.params.odds) )
+				if ( "odds" in _arr.params && RandomInt(0, 100) > _arr.params.odds )
 					return null
 				if ( "fire" in _arr.params )
 				{
 					local relay = Entities.FindByName( null, _arr.params.fire[0] )
 					if ( relay && relay.GetClassname() == "logic_relay" )
-						DoEntFire( "!self", _arr.params.fire[1], "", _arr.params.fire[2], null, relay )
+						DoEntFire( _arr.params.fire[0], _arr.params.fire[1], "", _arr.params.fire[2], speaker, speaker )
 				}
 				if ( "speakonce" in _arr.params )
 					arr.remove(retval)
@@ -222,7 +233,7 @@ class RRule {
 				print("Matched " )
 				R.Describe()
 			}
-			if ( ("odds" in R.params) && !(RandomInt(0, 100) <= R.params.odds) )
+			if ( "odds" in R.params && RandomInt(0, 100) > R.params.odds )
 			{
 				Disable()
 				return // do nothing
@@ -231,7 +242,7 @@ class RRule {
 			{
 				local relay = Entities.FindByName( null, R.params.fire[0] )
 				if ( relay && relay.GetClassname() == "logic_relay" )
-					DoEntFire( "!self", R.params.fire[1], "", R.params.fire[2], null, relay ) // speaker should be caller and activator
+					DoEntFire( R.params.fire[0], R.params.fire[1], "", R.params.fire[2], speaker, speaker )
 			}
 			if ( "speakonce" in R.params )
 			{
@@ -253,7 +264,7 @@ class RRule {
 				print("Matched " )
 				R.Describe()
 			}
-			if ( ("odds" in R.params) && !(RandomInt(0, 100) <= R.params.odds) )
+			if ( "odds" in R.params && RandomInt(0, 100) > R.params.odds )
 			{
 				Disable()
 				return // do nothing
@@ -262,7 +273,7 @@ class RRule {
 			{
 				local relay = Entities.FindByName( null, R.params.fire[0] )
 				if ( relay && relay.GetClassname() == "logic_relay" )
-					DoEntFire( "!self", R.params.fire[1], "", R.params.fire[2], null, relay )
+					DoEntFire( R.params.fire[0], R.params.fire[1], "", R.params.fire[2], speaker, speaker )
 			}
 			if ( "speakonce" in R.params )
 			{
@@ -284,6 +295,9 @@ class RRule {
 	criteria = [];
 	responses = [];
 	group_params = null;
+
+	speaker = null;
+	actor_to_character = { Gambler=0, NamVet=0, Producer=1, TeenGirl=1, Coach=2, Manager=2, Mechanic=3, Biker=3 };
 
 	// handles the 'response group' state which is
 	// used to pick the next response in sequence, etc
