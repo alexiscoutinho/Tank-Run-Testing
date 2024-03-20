@@ -26,11 +26,13 @@
 		survivor_revive_duration 3
 		survivor_revive_health 40
 		tank_burn_duration 20
-		tank_burn_duration_expert 30
 		tank_burn_duration_hard 25
+		tank_burn_duration_expert 30
+		vomitjar_radius 180
 		z_tank_incapacitated_health 0
 		z_tank_throw_interval 999999
-		tank_swing_interval 3
+		tank_swing_interval 2.2
 		defibrillator_return_to_life_time 1.5
+		z_tank_grenade_launcher_dmg_scale 5
 	}
 }
