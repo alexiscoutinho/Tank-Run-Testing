@@ -296,6 +296,8 @@ if ( IsMissionFinalMap() || triggerFinale )
 			}
 		}
 
+		getconsttable().HUD_FLAG_BLINK <- HUD_FLAG_BLINK;
+
 		function DecreaseHUDTimerBy( time )
 		{
 			HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - time );
@@ -464,7 +466,7 @@ else
 		for ( local player; player = Entities.FindByClassname( player, "player" ); )
 		{
 			if ( player.IsSurvivor() && !player.IsDead() && !player.IsDying()
-				&& GetCurrentFlowPercentForPlayer( player ) > 50 && player.GetLastKnownArea().HasSpawnAttributes( CHECKPOINT ) )//what about those null cases?
+				&& GetCurrentFlowPercentForPlayer( player ) > 50 && player.GetLastKnownArea().HasSpawnAttributes( CHECKPOINT ) )//what about those null cases?//u should instead test if the standing players are in the closed saferoom, not any random open end saferoom
 			{
 				InternalState.SafeRoomCloseTime = Time();
 				InternalState.SafeRoomAbandonThink = true;

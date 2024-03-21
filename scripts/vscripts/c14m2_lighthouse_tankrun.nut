@@ -1,3 +1,5 @@
+getconsttable().HUD_MID_TOP <- HUD_MID_TOP;
+
 function OnGameEvent_round_start( params ) // should more I/O changes be made?
 {
 	foreach ( name in [ "gascans_finale_normal", "gascans_finale_expert" ] )
