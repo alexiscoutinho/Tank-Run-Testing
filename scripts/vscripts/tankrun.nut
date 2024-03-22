@@ -296,14 +296,19 @@ if ( IsMissionFinalMap() || triggerFinale )
 			}
 		}
 
-		getconsttable().HUD_FLAG_BLINK <- HUD_FLAG_BLINK;
-
 		function DecreaseHUDTimerBy( time )
 		{
 			HUDManageTimers( 0, TIMER_COUNTDOWN, HUDReadTimer( 0 ) - time );
-			TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags | HUD_FLAG_BLINK;
-			EntFire( "worldspawn", "RunScriptCode",
-				"local field = g_ModeScript.TankRunHUD.Fields.rescue_time; field.flags = field.flags & ~HUD_FLAG_BLINK", 1.5 );
+
+			for ( local player; player = Entities.FindByClassname( player, "player" ); )
+			{
+				if ( !IsPlayerABot( player ) )
+				{
+					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
+					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
+					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
+				}
+			}
 		}
 
 		function SetupModeHUD()
@@ -391,7 +396,8 @@ if ( IsMissionFinalMap() || triggerFinale )
 				if ( !SessionState.HoldoutStarted )
 					return;
 
-				DecreaseHUDTimerBy( 30 );
+				if ( !SessionState.HoldoutEnded ) // shouldn't the generators be disabled instead?
+					DecreaseHUDTimerBy( 30 );
 
 				if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit )
 					ZSpawn( { type = 8 } );
@@ -673,7 +679,7 @@ function OnGameEvent_tank_killed( params )
 	if ( InternalState.BiledTanks.len() == 0 )
 		InternalState.BileHurtTankThink = false;
 
-	if ( SessionState.HoldoutStarted )
+	if ( SessionState.HoldoutStarted && !SessionState.HoldoutEnded )
 		DecreaseHUDTimerBy( 10 );
 }
 
