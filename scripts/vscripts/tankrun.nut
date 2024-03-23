@@ -69,7 +69,7 @@ MutationState <-
 	TanksDisabled = false
 	TankHealth = 4000
 	DifficultyHealths = [ 2000, 3000, 4000, 5000 ]
-	DeployChance = 50
+	DeployChance = 75
 	SafeRoomAbandonDelay = 10
 }
 

@@ -1,4 +1,3 @@
-delete ChallengeScript.DecreaseHUDTimerBy;
 delete ChallengeScript.SetupModeHUD;
 
 function OnGameEvent_round_start( params )
@@ -23,3 +22,6 @@ function OnGameEvent_finale_start( params )
 	SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
 	SessionState.HoldoutStarted = true;
 }
+
+delete ChallengeScript.DecreaseHUDTimerBy;
+function DecreaseHUDTimerBy(_) {}
