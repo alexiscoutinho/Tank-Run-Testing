@@ -351,20 +351,25 @@ if ( IsMissionFinalMap() || triggerFinale )
 
 		function OnGameEvent_round_start_post_nav( params )
 		{
-			if ( !("finaleAreas" in getroottable()) )
+			if ( !("toggledAreas" in getroottable()) )
 			{
 				local allAreas = {};
 				NavMesh.GetAllAreas( allAreas );
 
-				::finaleAreas <- {};
-				foreach ( area in allAreas )
+				if ( SessionState.CheckSurvivorsInFinaleArea )
 				{
-					if ( area.HasSpawnAttributes( FINALE ) )
-						finaleAreas.rawset( area, area );
+					::toggledAreas <- {};
+					foreach ( area in allAreas )
+					{
+						if ( area.HasSpawnAttributes( FINALE ) )
+							toggledAreas.rawset( area, area );
+					}
 				}
+				else
+					::toggledAreas <- allAreas;
 			}
 
-			foreach ( area in finaleAreas )
+			foreach ( area in toggledAreas )
 				area.RemoveSpawnAttributes( FINALE );
 		}
 
@@ -378,12 +383,12 @@ if ( IsMissionFinalMap() || triggerFinale )
 				for ( local player; player = Entities.FindByClassname( player, "player" ); )
 				{
 					if ( player.IsSurvivor() && !player.IsDead() && !player.IsDying() && !player.IsIncapacitated()
-						&& !player.IsHangingFromLedge() && !(player.GetLastKnownArea() in finaleAreas) )
+						&& !player.IsHangingFromLedge() && !(player.GetLastKnownArea() in toggledAreas) )
 						return true;
 				}
 			}
 
-			foreach ( area in finaleAreas )
+			foreach ( area in toggledAreas )
 				area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
 			return true;
 		}

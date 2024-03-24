@@ -6,16 +6,16 @@ MapState <-
 ChallengeScript.rawdelete( "OnGameEvent_round_start_post_nav" );
 function OnGameEvent_round_start_post_nav( params )
 {
-	if ( !("finaleAreas" in getroottable()) )
+	if ( !("toggledAreas" in getroottable()) )
 	{
 		local allAreas = {};
 		NavMesh.GetAllAreas( allAreas );
 
-		::finaleAreas <- {};
+		::toggledAreas <- {};
 		foreach ( area in allAreas )
 		{
 			if ( area.HasSpawnAttributes( FINALE ) )
-				finaleAreas.rawset( area, area );
+				toggledAreas.rawset( area, area );
 		}
 	}
 }
@@ -33,6 +33,6 @@ function OnGameEvent_round_start( params )
 
 function OnGameEvent_player_left_safe_area( params )
 {
-	foreach ( area in finaleAreas )
+	foreach ( area in toggledAreas )
 		area.RemoveSpawnAttributes( FINALE );
 }
