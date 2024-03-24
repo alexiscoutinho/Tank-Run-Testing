@@ -52,7 +52,7 @@ function OnGameEvent_round_start( params )
 
 	ent = Entities.FindByName( null, "spawn_train_tank_coop" );
 	ent.ValidateScriptScope();
-	ent.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
+	ent.GetScriptScope().InputSpawnZombie <- InputSpawnZombie.bindenv( this );
 	TrainCarTankPos = ent.GetOrigin();
 
 	EntFire( "tankdoorout_button", "AddOutput", "use_time 2" );

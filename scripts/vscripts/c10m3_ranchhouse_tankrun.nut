@@ -35,7 +35,7 @@ function OnGameEvent_round_start_post_nav( params )
 	local spawner = Entities.FindByName( null, "spawn_church_zombie" );
 	NetProps.SetPropString( spawner, "m_szPopulation", "tank" );
 	spawner.ValidateScriptScope();
-	spawner.GetScriptScope().InputSpawnZombie <- InputSpawnZombie;
+	spawner.GetScriptScope().InputSpawnZombie <- InputSpawnZombie.bindenv( this );
 	ChurchGuyPos = spawner.GetOrigin();
 }
 
