@@ -1,6 +1,10 @@
+MapState <-
+{
+	SpawnInterval = 25
+}
+
 function OnGameEvent_round_start_pre_entity( params )
 {
-	EntFire( "info_map_parameters", "AddOutput", "UpgradepackDensity 3" );
 	EntFire( "info_map_parameters", "AddOutput", "PipeBombDensity 4" );
 }
 
