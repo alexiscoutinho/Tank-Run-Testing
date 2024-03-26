@@ -446,6 +446,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 else
 {
 	const CHECKPOINT = 2048;
+	local survivor_incap_decay_rate;
 
 	SafeRoomAbandonThink = function ()
 	{
@@ -467,8 +468,15 @@ else
 						return;
 				}
 			}
+
+			survivor_incap_decay_rate = Convars.GetFloat( "survivor_incap_decay_rate" );
 			Convars.SetValue( "survivor_incap_decay_rate", Convars.GetFloat( "survivor_incap_hopeless_decay_rate" ) );
 			InternalState.SafeRoomAbandonThink = false;
+
+			function OnShutdown()
+			{
+				Convars.SetValue( "survivor_incap_decay_rate", survivor_incap_decay_rate );
+			}
 		}
 	}
 
@@ -542,7 +550,6 @@ weaponsToConvert <-
 function OnGameEvent_round_start( params )
 {
 	SessionState.TankHealth = SessionState.DifficultyHealths[ GetDifficulty() ];
-	Convars.SetValue( "survivor_incap_decay_rate", 3 );
 
 	for ( local spawner, population; spawner = Entities.FindByClassname( spawner, "info_zombie_spawn" ); )
 	{
