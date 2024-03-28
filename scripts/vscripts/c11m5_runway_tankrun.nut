@@ -1,4 +1,0 @@
-MapState <-
-{
-	FirstSpawnDelay = 3
-}
