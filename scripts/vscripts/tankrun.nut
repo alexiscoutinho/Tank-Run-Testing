@@ -85,6 +85,7 @@ local InternalState =
 	TankSpeedThink = true
 	BileHurtTankThink = false
 	SafeRoomAbandonThink = false
+	FinaleAreaThink = false
 	EndHoldoutThink = false
 }
 
@@ -158,7 +159,7 @@ local function BileHurtTankThink()
 		tank.TakeDamage( 100, 0, survivor );
 }
 
-local SafeRoomAbandonThink, EndHoldoutThink;
+local SafeRoomAbandonThink, FinaleAreaThink, EndHoldoutThink;
 
 local function TankRunThink()
 {
@@ -172,6 +173,8 @@ local function TankRunThink()
 		BileHurtTankThink();
 	if ( InternalState.SafeRoomAbandonThink )
 		SafeRoomAbandonThink();
+	if ( InternalState.FinaleAreaThink )
+		FinaleAreaThink();
 	if ( InternalState.EndHoldoutThink )
 		EndHoldoutThink();
 
@@ -275,14 +278,28 @@ if ( director )
 	}
 }
 */
-local triggerFinale = Entities.FindByClassname( null, "trigger_finale" ); // ignoring conditional point_template spawns
-if ( IsMissionFinalMap() || triggerFinale )
+local triggerFinale = Entities.FindByClassname( null, "trigger_finale" ); // disregarding bad practice of conditional point_template spawns
+if ( triggerFinale )
 {
 	MutationOptions.ShouldPlayBossMusic <- @( idx ) true;
 
 	local finaleType = NetProps.GetPropInt( triggerFinale, "m_type" );
-	if ( !triggerFinale || finaleType == 0 || finaleType == 2 )
+	local holdoutFinale = finaleType == 0 || finaleType == 2;
+	if ( holdoutFinale )
 	{
+		FinaleAreaThink = function ()
+		{
+			for ( local player; player = Entities.FindByClassname( player, "player" ); )
+			{
+				if ( player.IsSurvivor() && player.GetLastKnownArea() in finaleAreas )
+				{
+					SessionState.SpawnInterval = (SessionState.SpawnInterval + SessionState.HoldoutSpawnInterval) / 2.0;
+					InternalState.FinaleAreaThink = false;
+					return;
+				}
+			}
+		}
+
 		EndHoldoutThink = function ()
 		{
 			if ( HUDReadTimer( 0 ) <= 0 )
@@ -304,7 +321,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 			{
 				if ( !IsPlayerABot( player ) )
 				{
-					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
+					EmitSoundOnClient( "Menu.Timer", player );
 					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
 					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
 				}
@@ -345,96 +362,98 @@ if ( IsMissionFinalMap() || triggerFinale )
 		}
 	}
 
-	if ( triggerFinale )
+	const FINALE = 64;
+
+	function OnGameEvent_round_start_post_nav( params )
 	{
-		const FINALE = 64;
-
-		function OnGameEvent_round_start_post_nav( params )
+		if ( !("toggledAreas" in getroottable()) )
 		{
-			if ( !("toggledAreas" in getroottable()) )
+			local allAreas = {}, finaleAreas = {};
+			NavMesh.GetAllAreas( allAreas );
+
+			if ( SessionState.CheckSurvivorsInFinaleArea || holdoutFinale )
 			{
-				local allAreas = {};
-				NavMesh.GetAllAreas( allAreas );
-
-				if ( SessionState.CheckSurvivorsInFinaleArea )
+				foreach ( area in allAreas )
 				{
-					::toggledAreas <- {};
-					foreach ( area in allAreas )
-					{
-						if ( area.HasSpawnAttributes( FINALE ) )
-							toggledAreas.rawset( area, area );
-					}
+					if ( area.HasSpawnAttributes( FINALE ) )
+						finaleAreas.rawset( area, area );
 				}
-				else
-					::toggledAreas <- allAreas;
+				if ( holdoutFinale )
+					::finaleAreas <- finaleAreas;
 			}
-
-			foreach ( area in toggledAreas )
-				area.RemoveSpawnAttributes( FINALE );
+			::toggledAreas <- SessionState.CheckSurvivorsInFinaleArea ? finaleAreas : allAreas;
 		}
 
-		triggerFinale.ValidateScriptScope(); // what if you have multiple trigger_finale entities?
-		local scope = triggerFinale.GetScriptScope();
+		// delayed by 1 tick because spawning during c2m5, c4m5 and c7m3 finales breaks otherwise
+		EntFire( "worldspawn", "RunScriptCode", "foreach ( area in toggledAreas ) area.RemoveSpawnAttributes( FINALE )", 0.03 );
+	}
 
-		scope.InputUse <- function () // poor compatibility though
+	if ( NetProps.GetPropInt( triggerFinale, "m_bIsSacrificeFinale" ) )
+	{
+		function OnGameEvent_generator_started( params )
 		{
-			if ( SessionState.CheckSurvivorsInFinaleArea )
-			{
-				for ( local player; player = Entities.FindByClassname( player, "player" ); )
-				{
-					if ( player.IsSurvivor() && !player.IsDead() && !player.IsDying() && !player.IsIncapacitated()
-						&& !player.IsHangingFromLedge() && !(player.GetLastKnownArea() in toggledAreas) )
-						return true;
-				}
-			}
+			if ( !SessionState.HoldoutStarted )
+				return;
 
-			foreach ( area in toggledAreas )
-				area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
-			return true;
-		}
-		scope.InputForceFinaleStart <- scope.InputUse;
+			if ( !SessionState.HoldoutEnded ) // shouldn't the generators be disabled instead?
+				DecreaseHUDTimerBy( 30 );
 
-		if ( NetProps.GetPropInt( triggerFinale, "m_bIsSacrificeFinale" ) )
-		{
-			function OnGameEvent_generator_started( params )
-			{
-				if ( !SessionState.HoldoutStarted )
-					return;
-
-				if ( !SessionState.HoldoutEnded ) // shouldn't the generators be disabled instead?
-					DecreaseHUDTimerBy( 30 );
-
-				if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit )
-					ZSpawn( { type = 8 } );
-			}
+			if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit )
+				ZSpawn( { type = 8 } );
 		}
 	}
 
-	function OnGameEvent_finale_start( params )
+	triggerFinale.ValidateScriptScope(); // what if you have multiple trigger_finale entities?
+	local scope = triggerFinale.GetScriptScope();
+
+	scope.InputUse <- function () // poor compatibility though
 	{
-		if ( SessionState.FirstSpawnDelay == -1 )
+		if ( SessionState.CheckSurvivorsInFinaleArea )
 		{
-			InternalState.SpawnTankThink = true;
-			ReleaseTriggerMultiples();
+			for ( local player; player = Entities.FindByClassname( player, "player" ); )
+			{
+				if ( player.IsSurvivor() && !player.IsDead() && !player.IsDying() && !player.IsIncapacitated()
+					&& !player.IsHangingFromLedge() && !(player.GetLastKnownArea() in toggledAreas) )
+					return true;
+			}
 		}
 
-		if ( finaleType == 4 )
-			return;
-
-		HUDManageTimers( 0, TIMER_COUNTDOWN, SessionState.RescueDelay );
-		TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags & ~HUD_FLAG_NOTVISIBLE;
-
-		SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
-		SessionState.HoldoutStarted = true;
-		InternalState.EndHoldoutThink = true;
+		foreach ( area in toggledAreas )
+			area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
+		return true;
 	}
+	scope.InputForceFinaleStart <- scope.InputUse;//forcefinale may occur with all players dead or incap though...
 
-	function OnGameEvent_gauntlet_finale_start( params )
+	if ( finaleType != 1 )
 	{
-		if ( SessionState.FirstSpawnDelay == -1 )
+		function OnGameEvent_finale_start( params )
 		{
-			InternalState.SpawnTankThink = true;
-			ReleaseTriggerMultiples();
+			if ( SessionState.FirstSpawnDelay == -1 )
+			{
+				InternalState.SpawnTankThink = true;
+				ReleaseTriggerMultiples();
+			}
+
+			if ( finaleType == 4 )
+				return;
+
+			HUDManageTimers( 0, TIMER_COUNTDOWN, SessionState.RescueDelay );
+			TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags & ~HUD_FLAG_NOTVISIBLE;
+
+			SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
+			SessionState.HoldoutStarted = true;
+			InternalState.EndHoldoutThink = true;
+		}
+	}
+	else
+	{
+		function OnGameEvent_gauntlet_finale_start( params )
+		{
+			if ( SessionState.FirstSpawnDelay == -1 )
+			{
+				InternalState.SpawnTankThink = true;
+				ReleaseTriggerMultiples();
+			}
 		}
 	}
 
@@ -443,7 +462,7 @@ if ( IsMissionFinalMap() || triggerFinale )
 		InternalState.SpawnTankThink = false;
 	}
 }
-else
+else if ( !IsMissionFinalMap() ) // still unnecessarily runs once in multi-ending maps
 {
 	const CHECKPOINT = 2048;
 	local survivor_incap_decay_rate;
@@ -558,6 +577,9 @@ function OnGameEvent_round_start( params )
 			spawner.Kill();
 	}
 
+	for ( local ammo; ammo = Entities.FindByModel( ammo, "models/props/terror/ammo_stack.mdl" ); ) // c2m5, c3m4 & c14m2 ammo glow entities
+		ammo.Kill();
+
 	for ( local upgradepack; upgradepack = Entities.FindByClassname( upgradepack, "weapon_upgradepack_*" ); )
 	{
 		if ( NetProps.GetPropInt( upgradepack, "m_fFlags" ) & FL_KILLME )
@@ -631,6 +653,9 @@ function OnGameEvent_difficulty_changed( params )
 
 function OnGameEvent_player_left_safe_area( params )
 {
+	if ( FinaleAreaThink )
+		InternalState.FinaleAreaThink = true;
+
 	if ( SessionState.FirstSpawnDelay == -1 )
 		return;
 	if ( SessionState.FirstSpawnDelay > 0 )
