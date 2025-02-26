@@ -19,6 +19,7 @@ function OnGameEvent_round_start( params )
 delete ChallengeScript.OnGameEvent_finale_start;
 function OnGameEvent_finale_start( params )
 {
+	delete SessionOptions.ShouldPlayBossMusic;
 	SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
 	SessionState.HoldoutStarted = true;
 }

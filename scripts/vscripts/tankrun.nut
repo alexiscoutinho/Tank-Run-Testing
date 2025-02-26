@@ -75,9 +75,11 @@ MutationState <-
 
 local InternalState =
 {
+	LastTankTime = 0
 	LastSpawnTime = 0
 	LastAlarmTankTime = 0
 	SafeRoomCloseTime = 0
+	PlayingMetal = false
 	Tanks = {}
 	BiledTanks = {}
 	LeftSafeAreaThink = false
@@ -88,6 +90,8 @@ local InternalState =
 	FinaleAreaThink = false
 	EndHoldoutThink = false
 }
+
+MutationOptions.ShouldPlayBossMusic <- @( idx ) !InternalState.PlayingMetal; // necessary to prevent music conflicts with double tanks
 
 local function ReleaseTriggerMultiples()//or Activate/StartTankSpawning? depends if u lock them
 {
@@ -281,8 +285,6 @@ if ( director )
 local triggerFinale = Entities.FindByClassname( null, "trigger_finale" ); // disregarding bad practice of conditional point_template spawns
 if ( triggerFinale )
 {
-	MutationOptions.ShouldPlayBossMusic <- @( idx ) true;
-
 	local finaleType = NetProps.GetPropInt( triggerFinale, "m_type" );
 	local holdoutFinale = finaleType == 0 || finaleType == 2;
 	if ( holdoutFinale )
@@ -321,7 +323,7 @@ if ( triggerFinale )
 			{
 				if ( !IsPlayerABot( player ) )
 				{
-					EmitSoundOnClient( "Menu.Timer", player );
+					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
 					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
 					EmitSoundOnClient( "ScavengeSB.RoundTimeIncrement", player );
 				}
@@ -398,7 +400,7 @@ if ( triggerFinale )
 			if ( !SessionState.HoldoutEnded ) // shouldn't the generators be disabled instead?
 				DecreaseHUDTimerBy( 30 );
 
-			if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit )
+			if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit || SessionOptions.cm_TankLimit == -1 )
 				ZSpawn( { type = 8 } );
 		}
 	}
@@ -433,6 +435,7 @@ if ( triggerFinale )
 				InternalState.SpawnTankThink = true;
 				ReleaseTriggerMultiples();
 			}
+			delete SessionOptions.ShouldPlayBossMusic;
 
 			if ( finaleType == 4 )
 				return;
@@ -454,6 +457,7 @@ if ( triggerFinale )
 				InternalState.SpawnTankThink = true;
 				ReleaseTriggerMultiples();
 			}
+			delete SessionOptions.ShouldPlayBossMusic;
 		}
 	}
 
@@ -569,6 +573,22 @@ weaponsToConvert <-
 function OnGameEvent_round_start( params )
 {
 	SessionState.TankHealth = SessionState.DifficultyHealths[ GetDifficulty() ];
+
+	SpawnEntityFromTable( "ambient_music", {
+		targetname = "tank_music_single"
+		message = "Event.Tank"
+	} );
+	SpawnEntityFromTable( "ambient_music", {
+		targetname = "tank_music_double"
+		message = "Event.TankMidpoint_Metal"
+	} );
+	if ( triggerFinale )
+	{
+		SpawnEntityFromTable( "ambient_music", {
+			targetname = "tank_music_finale"
+			message = "Event.TankMidpoint"
+		} );
+	}
 
 	for ( local spawner, population; spawner = Entities.FindByClassname( spawner, "info_zombie_spawn" ); )
 	{
@@ -705,6 +725,22 @@ function OnGameEvent_tank_spawn( params )
 	local randomModel = tankModels[ RandomInt( 0, tankModels.len() - 1 ) ];
 	if ( randomModel != modelName )
 		tank.SetModel( randomModel );
+
+	if ( !InternalState.PlayingMetal )
+	{
+		if ( Time() - InternalState.LastTankTime == 0 )
+		{
+			EntFire( "tank_music_single", "StopSound" );
+			EntFire( "tank_music_double", "PlaySound" );
+			InternalState.PlayingMetal = true;
+		}
+		else if ( Director.IsFinale() )
+		{
+			EntFire( "tank_music_single", "StopSound" );//can still cut off music
+			EntFire( "tank_music_finale", "PlaySound" );
+		}
+	}
+	InternalState.LastTankTime = Time();
 }
 
 function OnGameEvent_tank_killed( params )
@@ -712,6 +748,12 @@ function OnGameEvent_tank_killed( params )
 	local tank = GetPlayerFromUserID( params["userid"] );
 
 	InternalState.Tanks.rawdelete( tank );
+	if ( InternalState.Tanks.len() == 0 )
+	{
+		EntFire( "tank_music_*", "StopSound" );
+		InternalState.PlayingMetal = false;
+	}
+
 	InternalState.BiledTanks.rawdelete( tank );
 	if ( InternalState.BiledTanks.len() == 0 )
 		InternalState.BileHurtTankThink = false;
@@ -729,6 +771,12 @@ function OnGameEvent_player_disconnect( params )
 	if ( player.GetZombieType() == ZOMBIE_TANK )
 	{
 		InternalState.Tanks.rawdelete( player );
+		if ( InternalState.Tanks.len() == 0 )
+		{
+			EntFire( "tank_music_*", "StopSound" );
+			InternalState.PlayingMetal = false;
+		}
+
 		InternalState.BiledTanks.rawdelete( player );
 		if ( InternalState.BiledTanks.len() == 0 )
 			InternalState.BileHurtTankThink = false;
@@ -768,8 +816,8 @@ function OnGameEvent_player_no_longer_it( params )
 
 function OnGameEvent_triggered_car_alarm( params )
 {
-	if ( InternalState.Tanks.len() < SessionOptions.cm_TankLimit && (Time() - InternalState.LastAlarmTankTime >= SessionState.SpawnInterval
-		|| InternalState.LastAlarmTankTime == 0) )
+	if ( (InternalState.Tanks.len() < SessionOptions.cm_TankLimit || SessionOptions.cm_TankLimit == -1)
+		&& (Time() - InternalState.LastAlarmTankTime >= SessionState.SpawnInterval || InternalState.LastAlarmTankTime == 0) )
 	{
 		if ( ZSpawn( { type = 8 } ) )
 			InternalState.LastAlarmTankTime = Time();
