@@ -1,4 +1,7 @@
-delete ChallengeScript.SetupModeHUD;
+ChallengeScript.rawdelete( "DecreaseHUDTimerBy" );
+function DecreaseHUDTimerBy(_) {}
+
+ChallengeScript.rawdelete( "SetupModeHUD" );
 
 function OnGameEvent_round_start( params )
 {
@@ -16,13 +19,10 @@ function OnGameEvent_round_start( params )
 	EntityOutputs.RemoveOutput( ent, "FinaleEscapeStarted", "", "", "" );
 }
 
-delete ChallengeScript.OnGameEvent_finale_start;
+ChallengeScript.rawdelete( "OnGameEvent_finale_start" );
 function OnGameEvent_finale_start( params )
 {
 	delete SessionOptions.ShouldPlayBossMusic;
+	SessionState.FinaleStarted = true;
 	SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
-	SessionState.HoldoutStarted = true;
 }
-
-delete ChallengeScript.DecreaseHUDTimerBy;
-function DecreaseHUDTimerBy(_) {}

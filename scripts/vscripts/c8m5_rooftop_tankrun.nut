@@ -1,4 +1,4 @@
 MapState <-
 {
-	SpawnInterval = 35
+	SpawnInterval = 30
 }

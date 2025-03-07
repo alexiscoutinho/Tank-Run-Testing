@@ -59,7 +59,7 @@ MutationState <-
 	TankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_dlc3.mdl", "models/infected/hulk_l4d1.mdl" ]
 	CheckDefaultModel = true
 	CheckSurvivorsInFinaleArea = true
-	HoldoutStarted = false
+	FinaleStarted = false
 	HoldoutEnded = false
 	RescueDelay = 600
 	FirstSpawnDelay = 0
@@ -82,6 +82,8 @@ local InternalState =
 	PlayingMetal = false
 	Tanks = {}
 	BiledTanks = {}
+	FinaleType = -1
+	HoldoutFinale = false
 	LeftSafeAreaThink = false
 	SpawnTankThink = false
 	TankSpeedThink = true
@@ -99,7 +101,7 @@ local function ReleaseTriggerMultiples()//or Activate/StartTankSpawning? depends
 	{
 		if ( NetProps.GetPropInt( trigger, "m_bAllowIncapTouch" ) == 1 && NetProps.GetPropInt( trigger, "m_iEntireTeam" ) == 2 )//should I go overkill with == to <>= transform? probably being creative would be enough
 			NetProps.SetPropInt( trigger, "m_bAllowIncapTouch", 0 );
-	}//should I revive modifiedKV to refresh the triggerFinale pointer and enforce that the Input hook exists? so far, no real case exists
+	}
 }
 
 local function LeftSafeAreaThink()
@@ -119,7 +121,7 @@ local function LeftSafeAreaThink()
 	}
 }
 
-local function SpawnTankThink()//finale stage tanks still spawn it seems
+local function SpawnTankThink()
 {
 	if ( SessionState.TanksDisabled )
 		return;
@@ -129,7 +131,7 @@ local function SpawnTankThink()//finale stage tanks still spawn it seems
 	{
 		if ( ZSpawn( { type = 8 } ) )//lock safe room door when players are still loading
 		{
-			if ( SessionState.HoldoutStarted )
+			if ( SessionState.FinaleStarted && InternalState.HoldoutFinale )
 				ZSpawn( { type = 8 } );
 			InternalState.LastSpawnTime = Time();
 		}
@@ -182,10 +184,9 @@ local function TankRunThink()
 	if ( InternalState.EndHoldoutThink )
 		EndHoldoutThink();
 
-	if ( Director.GetCommonInfectedCount() > 0 )//why only remove commons?
-	{// because CI and SI limits are permeable
-		EntFire( "infected", "Kill" );
-	}
+	/*if ( Director.GetCommonInfectedCount() > 0 )//why only remove commons? because CI and SI limits are permeable
+		EntFire( "infected", "Kill" );*/
+
 	EntFire( "worldspawn", "CallScriptFunction", "TankRunThink", 1.0 );
 }
 
@@ -228,11 +229,11 @@ function AllowTakeDamage( damageTable )
 }
 
 const FL_KILLME = 67108864;
-local triggerFinale;
+local hasChangelevel, CheckAbandonCondition, ResetAbandonSystem;
 
 weaponsToConvert <-
 {
-	// ignoring non-_spawn items//what about rng spawners?
+	// ignoring non-_spawn items
 	weapon_upgradepack_explosive_spawn = "upgrade_ammo_explosive"
 	weapon_upgradepack_incendiary_spawn = "upgrade_ammo_incendiary"
 }
@@ -249,7 +250,7 @@ function OnGameEvent_round_start( params )
 		targetname = "tank_music_double"
 		message = "Event.TankMidpoint_Metal"
 	} );
-	if ( triggerFinale )
+	if ( hasFinale )
 	{
 		SpawnEntityFromTable( "ambient_music", {
 			targetname = "tank_music_finale"
@@ -282,12 +283,19 @@ function OnGameEvent_round_start( params )
 		}
 	}
 
-	for ( local door, scope; door = Entities.FindByClassname( door, "prop_door_rotating_checkpoint" ); )
+	if ( hasChangelevel )
 	{
-		if ( GetFlowPercentForPosition( door.GetOrigin(), false ) > 50 ) // must use conservative flow cutoff because of multi-ending maps
+		for ( local door, scope; door = Entities.FindByClassname( door, "prop_door_rotating_checkpoint" ); )
 		{
-			EntityOutputs.AddOutput( door, "OnFullyClosed", "!self", "RunScriptCode", "g_ModeScript.OnFullyClosed()", 0.0, -1 );
-			EntityOutputs.AddOutput( door, "OnOpen", "!self", "RunScriptCode", "g_ModeScript.OnOpen()", 0.0, -1 );
+			if ( GetFlowPercentForPosition( door.GetCenter(), false ) > 50 ) // must use conservative flow cutoff for multi-ending maps
+			{
+				door.ValidateScriptScope();
+				scope = door.GetScriptScope();
+				scope.CheckAbandonCondition <- CheckAbandonCondition.bindenv( this ); // a bit inefficient in multi-ending maps
+				scope.ResetAbandonSystem <- ResetAbandonSystem.bindenv( this );
+				door.ConnectOutput( "OnFullyClosed", "CheckAbandonCondition" );
+				door.ConnectOutput( "OnOpen", "ResetAbandonSystem" );
+			}
 		}
 	}
 
@@ -340,6 +348,12 @@ function OnGameEvent_difficulty_changed( params )
 
 function OnGameEvent_player_left_safe_area( params )
 {
+	if ( "toggledAreas" in getroottable() )
+	{
+		foreach ( area in toggledAreas )
+			area.RemoveSpawnAttributes( FINALE );
+		toggledOff = true;
+	}
 	if ( FinaleAreaThink )
 		InternalState.FinaleAreaThink = true;
 
@@ -401,7 +415,7 @@ function OnGameEvent_tank_spawn( params )
 			EntFire( "tank_music_double", "PlaySound" );
 			InternalState.PlayingMetal = true;
 		}
-		else if ( Director.IsFinale() )
+		else if ( SessionState.FinaleStarted )
 		{
 			EntFire( "tank_music_single", "StopSound" );//can still cut off music
 			EntFire( "tank_music_finale", "PlaySound" );
@@ -410,23 +424,30 @@ function OnGameEvent_tank_spawn( params )
 	InternalState.LastTankTime = Time();
 }
 
-function OnGameEvent_tank_killed( params )
+function OnGameEvent_player_death( params ) // because of https://github.com/Tsuey/L4D2-Community-Update/issues/37
 {
-	local tank = GetPlayerFromUserID( params["userid"] );
+	local player = GetPlayerFromUserID( params["userid"] );
 
-	InternalState.Tanks.rawdelete( tank );
-	if ( InternalState.Tanks.len() == 0 )
+	if ( player.GetZombieType() == ZOMBIE_TANK )
 	{
-		EntFire( "tank_music_*", "StopSound" );
-		InternalState.PlayingMetal = false;
+		InternalState.Tanks.rawdelete( player );
+		if ( InternalState.Tanks.len() == 0 )
+		{
+			EntFire( "tank_music_*", "StopSound" );
+			InternalState.PlayingMetal = false;
+		}
+
+		InternalState.BiledTanks.rawdelete( player );
+		if ( InternalState.BiledTanks.len() == 0 )
+			InternalState.BileHurtTankThink = false;
+
+		if ( SessionState.FinaleStarted && InternalState.HoldoutFinale && !SessionState.HoldoutEnded )
+		{
+			local attacker = GetPlayerFromUserID( params["attacker"] );//assuming existence
+			if ( NetProps.GetPropInt( attacker, "m_iTeamNum" ) == 2 )
+				DecreaseHUDTimerBy( 10 );
+		}
 	}
-
-	InternalState.BiledTanks.rawdelete( tank );
-	if ( InternalState.BiledTanks.len() == 0 )
-		InternalState.BileHurtTankThink = false;
-
-	if ( SessionState.HoldoutStarted && !SessionState.HoldoutEnded )
-		DecreaseHUDTimerBy( 10 );
 }
 
 function OnGameEvent_player_disconnect( params )
@@ -469,7 +490,6 @@ function OnGameEvent_player_now_it( params )
 function OnGameEvent_player_no_longer_it( params )
 {
 	local victim = GetPlayerFromUserID( params["userid"] );
-
 	if ( !victim )
 		return;
 
@@ -495,13 +515,14 @@ function OnGameEvent_mission_lost( params )
 {
 	InternalState.SpawnTankThink = false;
 }
-//remove local var declarations inside all loops
-if ( Director.IsFirstMapInScenario() )
+//remove local var declarations inside all loops?
+if ( Director.IsFirstMapInScenario() ) // do multi-start maps exist though?
 {
 	function OnGameplayStart() // check for primary weapons
 	{
 		local startArea = null;
 		local startPos = null;
+
 		for ( local survivorSpawn; survivorSpawn = Entities.FindByClassname( survivorSpawn, "info_survivor_position" ); )
 		{
 			local area = NavMesh.GetNearestNavArea( survivorSpawn.GetOrigin(), 100, false, false );
@@ -523,6 +544,7 @@ if ( Director.IsFirstMapInScenario() )
 
 			local weaponName = weapon.GetClassname();
 			local primaryNames = [ "smg", "rifle", "shotgun", "sniper", "grenade" ];
+
 			if ( weaponName == "weapon_spawn" )
 			{
 				weaponName = NetProps.GetPropString( weapon, "m_iszWeaponToSpawn" );
@@ -538,8 +560,7 @@ if ( Director.IsFirstMapInScenario() )
 			}
 		}
 
-		local itemNames = [ "weapon_pistol_spawn", "weapon_pistol_magnum_spawn", "weapon_spawn", "weapon_melee_spawn" ];
-		foreach ( name in itemNames )
+		foreach ( name in [ "weapon_pistol_spawn", "weapon_pistol_magnum_spawn", "weapon_spawn", "weapon_melee_spawn" ] )
 		{
 			local item = Entities.FindByClassnameNearest( name, startPos, 600 );
 			if ( item )
@@ -551,11 +572,10 @@ if ( Director.IsFirstMapInScenario() )
 			}
 		}
 
-		local w = [ "any_smg", "tier1_shotgun" ];
-		for ( local i = 0; i < 2; i++ )
+		foreach ( w in [ "any_smg", "tier1_shotgun" ] )
 			SpawnEntityFromTable( "weapon_spawn", {
 				spawn_without_director = 1
-				weapon_selection = w[i]
+				weapon_selection = w
 				count = 5
 				spawnflags = 3
 				origin = startArea.FindRandomSpot() + Vector( 0, 0, 50 )
@@ -564,8 +584,11 @@ if ( Director.IsFirstMapInScenario() )
 	}
 }
 
-triggerFinale = Entities.FindByClassname( null, "trigger_finale" ); // disregarding bad practice of conditional point_template spawns
-if ( !triggerFinale && !IsMissionFinalMap() ) // still unnecessarily runs once in multi-ending maps
+if ( !g_SecondRun )
+	return;
+
+hasChangelevel = Entities.FindByClassname( null, "info_changelevel" ) || Entities.FindByClassname( null, "trigger_changelevel" );
+if ( hasChangelevel )
 {
 	const CHECKPOINT = 2048;
 	local survivor_incap_decay_rate;
@@ -576,7 +599,7 @@ if ( !triggerFinale && !IsMissionFinalMap() ) // still unnecessarily runs once i
 		{
 			for ( local player; player = Entities.FindByClassname( player, "player" ); )
 			{
-				if ( !player.IsSurvivor() || player.IsDead() || player.IsDying() )
+				if ( NetProps.GetPropInt( player, "m_iTeamNum" ) != 2 || NetProps.GetPropInt( player, "m_lifeState" ) != 0 )
 					continue;
 
 				if ( player.IsIncapacitated() || player.IsHangingFromLedge() )
@@ -602,12 +625,14 @@ if ( !triggerFinale && !IsMissionFinalMap() ) // still unnecessarily runs once i
 		}
 	}
 
-	function OnFullyClosed()
+	CheckAbandonCondition = function ()
 	{
 		for ( local player; player = Entities.FindByClassname( player, "player" ); )
 		{
-			if ( player.IsSurvivor() && !player.IsDead() && !player.IsDying()
-				&& GetCurrentFlowPercentForPlayer( player ) > 50 && player.GetLastKnownArea().HasSpawnAttributes( CHECKPOINT ) )//what about those null cases?//u should instead test if the standing players are in the closed saferoom, not any random open end saferoom
+			if ( NetProps.GetPropInt( player, "m_iTeamNum" ) != 2 || NetProps.GetPropInt( player, "m_lifeState" ) != 0 )
+				continue;
+
+			if ( GetCurrentFlowPercentForPlayer( player ) > 50 && player.GetLastKnownArea().HasSpawnAttributes( CHECKPOINT ) )//what about those null cases?//u should instead test if the standing players are in the closed saferoom, not any random open end saferoom
 			{
 				InternalState.SafeRoomCloseTime = Time();
 				InternalState.SafeRoomAbandonThink = true;
@@ -616,26 +641,68 @@ if ( !triggerFinale && !IsMissionFinalMap() ) // still unnecessarily runs once i
 		}
 	}
 
-	function OnOpen()
+	ResetAbandonSystem = function ()
 	{
 		InternalState.SafeRoomAbandonThink = false;
 	}
 }
-else if ( triggerFinale )
+
+const FINALE = 64;
+
+if ( !("hasFinale" in getroottable()) )
 {
-	local finaleType = NetProps.GetPropInt( triggerFinale, "m_type" );
-	local holdoutFinale = finaleType == 0 || finaleType == 2;
-	if ( holdoutFinale )
+	::hasFinale <- false;
+
+	if ( Entities.FindByClassname( null, "trigger_finale" ) )
+		hasFinale = true;
+	else
 	{
-		FinaleAreaThink = function ()
+		local allAreas = {};
+		NavMesh.GetAllAreas( allAreas );
+
+		foreach ( area in allAreas )
 		{
-			for ( local player; player = Entities.FindByClassname( player, "player" ); )
+			if ( area.HasSpawnAttributes( FINALE ) )
 			{
-				if ( player.IsSurvivor() && player.GetLastKnownArea() in finaleAreas )
+				hasFinale = true;
+				break;
+			}
+		}
+	}
+}
+
+if ( hasFinale )
+{
+	local triggerFinales = [], finaleTypes = {};
+	for ( local triggerFinale; triggerFinale = Entities.FindByClassname( triggerFinale, "trigger_finale" ); )
+	{
+		triggerFinales.append( triggerFinale );
+		finaleTypes[ NetProps.GetPropInt( triggerFinale, "m_type" ) ] <- true;
+	}
+
+	local hasHoldout = 0 in finaleTypes || 2 in finaleTypes;
+	local compatMode = !triggerFinales.len();
+
+	if ( compatMode )
+		printl("Running in finale compatibility mode");
+
+	if ( hasHoldout || compatMode ) // official tankrun.nut won't include compatMode
+	{
+		if ( triggerFinales.len() == 1 )
+		{
+			FinaleAreaThink = function ()
+			{
+				for ( local player; player = Entities.FindByClassname( player, "player" ); )
 				{
-					SessionState.SpawnInterval = (SessionState.SpawnInterval + SessionState.HoldoutSpawnInterval) / 2.0;
-					InternalState.FinaleAreaThink = false;
-					return;
+					if ( NetProps.GetPropInt( player, "m_iTeamNum" ) != 2 )
+						continue;
+
+					if ( player.GetLastKnownArea() in finaleAreas )
+					{
+						SessionState.SpawnInterval = (SessionState.SpawnInterval + SessionState.HoldoutSpawnInterval) / 2.0;
+						InternalState.FinaleAreaThink = false;
+						return;
+					}
 				}
 			}
 		}
@@ -686,23 +753,27 @@ else if ( triggerFinale )
 			HUDPlace( HUD_MID_TOP, 0.45, 0.03, 0.1, 0.04 );
 			HUDSetLayout( TankRunHUD );
 		}
+	}
 
-		function GetNextStage()
+	function GetNextStage()
+	{
+		if ( SessionState.HoldoutEnded ) // unnecessary for gauntlet and scavenge finales?
 		{
-			if ( SessionState.HoldoutEnded )
-			{
-				SessionOptions.ScriptedStageType = STAGE_ESCAPE;
-				return;
-			}
-			if ( SessionState.HoldoutStarted )
-			{
-				SessionOptions.ScriptedStageType = STAGE_DELAY;
-				SessionOptions.ScriptedStageValue = -1;
-			}
+			SessionOptions.ScriptedStageType = STAGE_ESCAPE;#would it be nice to have an ESCAPE stage for every finale type? for compat maybe?
+		}
+		else if ( SessionState.FinaleStarted )
+		{
+			SessionOptions.ScriptedStageType = STAGE_DELAY;
+			SessionOptions.ScriptedStageValue = -1;
 		}
 	}
 
-	const FINALE = 64;
+	if ( "toggledOff" in getroottable() && toggledOff )
+	{
+		foreach ( area in toggledAreas )
+			area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE ); // to prevent flow errors
+		toggledOff = false;
+	}
 
 	function OnGameEvent_round_start_post_nav( params )
 	{
@@ -711,28 +782,35 @@ else if ( triggerFinale )
 			local allAreas = {}, finaleAreas = {};
 			NavMesh.GetAllAreas( allAreas );
 
-			if ( SessionState.CheckSurvivorsInFinaleArea || holdoutFinale )
+			if ( SessionState.CheckSurvivorsInFinaleArea || hasHoldout )
 			{
 				foreach ( area in allAreas )
 				{
 					if ( area.HasSpawnAttributes( FINALE ) )
 						finaleAreas.rawset( area, area );
 				}
-				if ( holdoutFinale )
+				if ( hasHoldout || compatMode )
 					::finaleAreas <- finaleAreas;
 			}
 			::toggledAreas <- SessionState.CheckSurvivorsInFinaleArea ? finaleAreas : allAreas;
+			::toggledOff <- null;
 		}
-
-		// delayed by 1 tick because spawning during c2m5, c4m5 and c7m3 finales breaks otherwise
-		EntFire( "worldspawn", "RunScriptCode", "foreach ( area in toggledAreas ) area.RemoveSpawnAttributes( FINALE )", 0.03 );
 	}
 
-	if ( NetProps.GetPropInt( triggerFinale, "m_bIsSacrificeFinale" ) )
+	local hasSacrifice = false;
+	foreach ( triggerFinale in triggerFinales )
+	{
+		if ( NetProps.GetPropInt( triggerFinale, "m_bIsSacrificeFinale" ) )
+		{
+			hasSacrifice = true;
+			break;
+		}
+	}
+	if ( hasSacrifice || compatMode )#is this acceptable? does the hook break stuff in non sacrifice? in fact it should be encouraged
 	{
 		function OnGameEvent_generator_started( params )
 		{
-			if ( !SessionState.HoldoutStarted )
+			if ( !SessionState.FinaleStarted )
 				return;
 
 			if ( !SessionState.HoldoutEnded ) // shouldn't the generators be disabled instead?
@@ -743,28 +821,92 @@ else if ( triggerFinale )
 		}
 	}
 
-	triggerFinale.ValidateScriptScope(); // what if you have multiple trigger_finale entities?
-	local scope = triggerFinale.GetScriptScope();
-
-	scope.InputUse <- function () // poor compatibility though
+	local function InputUse()
 	{
+		InternalState.FinaleType = NetProps.GetPropInt( self, "m_type" );
+		InternalState.HoldoutFinale = InternalState.FinaleType == 0 || InternalState.FinaleType == 2;
+
 		if ( SessionState.CheckSurvivorsInFinaleArea )
 		{
 			for ( local player; player = Entities.FindByClassname( player, "player" ); )
 			{
-				if ( player.IsSurvivor() && !player.IsDead() && !player.IsDying() && !player.IsIncapacitated()
-					&& !player.IsHangingFromLedge() && !(player.GetLastKnownArea() in toggledAreas) )
+				if ( NetProps.GetPropInt( player, "m_iTeamNum" ) != 2 || NetProps.GetPropInt( player, "m_lifeState" ) != 0 )
+					continue;
+
+				if ( !player.IsIncapacitated() && !player.IsHangingFromLedge() && !(player.GetLastKnownArea() in toggledAreas) )
 					return true;
 			}
 		}
 
-		foreach ( area in toggledAreas )
-			area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
+		if ( toggledOff )
+		{
+			foreach ( area in toggledAreas )
+				area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
+			toggledOff = false;
+		}
 		return true;
 	}
-	scope.InputForceFinaleStart <- scope.InputUse;//forcefinale may occur with all players dead or incap though...
 
-	if ( finaleType != 1 )
+	local function InputForceFinaleStart()
+	{
+		InternalState.FinaleType = NetProps.GetPropInt( self, "m_type" );
+		InternalState.HoldoutFinale = InternalState.FinaleType == 0 || InternalState.FinaleType == 2;
+
+		if ( toggledOff )
+		{
+			foreach ( area in toggledAreas )
+				area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
+			toggledOff = false;
+		}
+
+		// because of https://github.com/Tsuey/L4D2-Community-Update/issues/462
+		for ( local player, area; player = Entities.FindByClassname( player, "player" ); )
+		{
+			if ( NetProps.GetPropInt( player, "m_iTeamNum" ) != 2 || NetProps.GetPropInt( player, "m_lifeState" ) != 0 )
+				continue;
+
+			if ( (area = player.GetLastKnownArea()) && !area.HasSpawnAttributes( FINALE ) )//null area case may be hopeless
+			{
+				area.SetSpawnAttributes( area.GetSpawnAttributes() | FINALE );
+				EntFire( "worldspawn", "RunScriptCode", "NavMesh.GetNavAreaByID(" + area.GetID() + ").RemoveSpawnAttributes( FINALE )" );
+			}
+		}
+		return true;
+	}
+
+	local function PatchTriggerFinale( triggerFinale )
+	{
+		triggerFinale.ValidateScriptScope();
+		local scope = triggerFinale.GetScriptScope();
+		// poor compatibility though//assuming first-to serve?
+		scope.InputUse <- InputUse;
+		scope.InputForceFinaleStart <- InputForceFinaleStart;
+	}
+
+	if ( compatMode )
+	{
+		local function PostSpawn( entities )
+		{
+			foreach ( ent in entities )
+			{
+				if ( ent.GetClassname() == "trigger_finale" )
+					PatchTriggerFinale( ent );
+			}
+		}
+
+		for ( local template; template = Entities.FindByClassname( template, "point_template" ); )
+		{
+			template.ValidateScriptScope();
+			template.GetScriptScope().PostSpawn <- PostSpawn; // poor compatibility
+		}
+	}
+	else
+	{
+		foreach ( triggerFinale in triggerFinales )
+			PatchTriggerFinale( triggerFinale );
+	}
+
+	if ( !(1 in finaleTypes) )
 	{
 		function OnGameEvent_finale_start( params )
 		{
@@ -774,19 +916,21 @@ else if ( triggerFinale )
 				ReleaseTriggerMultiples();
 			}
 			delete SessionOptions.ShouldPlayBossMusic;
+			SessionState.FinaleStarted = true;
 
-			if ( finaleType == 4 )
+			if ( InternalState.FinaleType == 0 )
+				Director.ForceNextStage(); // to prevent the HALFTIME_BOSS and FINAL_BOSS stages
+			else if ( InternalState.FinaleType == 4 )
 				return;
 
 			HUDManageTimers( 0, TIMER_COUNTDOWN, SessionState.RescueDelay );
 			TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags & ~HUD_FLAG_NOTVISIBLE;
 
 			SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
-			SessionState.HoldoutStarted = true;
 			InternalState.EndHoldoutThink = true;
 		}
 	}
-	else
+	if ( 1 in finaleTypes || compatMode )
 	{
 		function OnGameEvent_gauntlet_finale_start( params )
 		{
@@ -796,6 +940,8 @@ else if ( triggerFinale )
 				ReleaseTriggerMultiples();
 			}
 			delete SessionOptions.ShouldPlayBossMusic;
+			SessionState.FinaleStarted = true;
+			Director.ForceNextStage(); // to prevent the GAUNTLET_BOSS stage
 		}
 	}
 

@@ -7,7 +7,7 @@ MapState <-
 local oldTankLimit;
 local TrainCarTankSpawn = false;
 
-function InputSpawnZombie()
+local function InputSpawnZombie()
 {
 	local numplayers = 0, numTanks = 0;
 	for ( local player; player = Entities.FindByClassname( player, "player" ); )
