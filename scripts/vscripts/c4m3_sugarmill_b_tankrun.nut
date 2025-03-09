@@ -30,7 +30,7 @@ function OnGameEvent_round_start( params )
 	// because of https://github.com/Tsuey/L4D2-Community-Update/issues/487
 	EntityOutputs.AddOutput( ent, "OnIn", "!self", "RunScriptCode", "EntFire(\"relay_elevator_*\", \"Trigger\", null, 0, self)", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnUser1", "prop_elevator_button", "SetAnimation", "TURN_ON", 0.0, -1 );
-	EntityOutputs.AddOutput( ent, "OnUser1", "button_callelevator", "PressIn", "", 0.1, -1 );
+	EntityOutputs.AddOutput( ent, "OnUser1", "button_callelevator_*", "PressIn", "", 0.1, -1 );
 	EntityOutputs.AddOutput( ent, "OnUser1", "prop_elevator_button", "SetAnimation", "idleon", 0.2, -1 );
 
 	SpawnEntityFromTable( "logic_relay", {
@@ -96,10 +96,12 @@ function OnGameEvent_round_start( params )
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "prop_elevator_callbutton_top", "SetAnimation", "idleoff", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "navblock_elevator_door_top", "UnblockNav", "", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "button_inelevator", "PressOut", "", 2.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedTop", "button_callelevator_down", "PressOut", "", 2.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "relay_elevator_*", "Toggle", "", 0.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedBottom", "prop_elevator_callbutton_bottom", "SetAnimation", "idleoff", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "navblock_elevator_door_bottom", "UnblockNav", "", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_inelevator", "PressOut", "", 2.0, -1 );
-	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_callelevator", "PressOut", "", 2.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_callelevator_up", "PressOut", "", 2.0, -1 );
 
 	SpawnEntityFromTable( "env_player_blocker", {
 		origin = "-1479.5 -9495 684"
@@ -110,49 +112,38 @@ function OnGameEvent_round_start( params )
 		BlockType = 1
 	} );
 
-	/*SpawnEntityFromTable( "prop_dynamic", {
-		origin = "-1406 -9609 172.497"//these coords are kinda shitty, fuck the precision, if valve directly wrote, they would be rounded
+	SpawnEntityFromTable( "prop_dynamic", {
+		origin = "-1406.5 -9609 172.5"
 		targetname = "prop_elevator_callbutton_bottom"
-		solid = 6
-		//rendercolor?
-		//renderamt?
 		model = "models/props_mill/freightelevatorbutton01.mdl"
-		//MinAnimTime?
-		//MaxAnimTime?
-		//glowcolor?
-		//glowbackfacemult?
-		//fadescale?
-		//fademindist?
-		DefaultAnim = "idleoff"
-		//angles?
-	} );*/
+	} );
 
-	/*SpawnEntityFromTable( "script_func_button", {
+	SpawnEntityFromTable( "script_func_button", {
 		wait = -1
 		targetname = "button_callelevator_down"
 		spawnflags = 1025
-		origin = "-1401 -9605 182" // X coord needs some adjustment
+		origin = "-1401 -9605.5 182"
 		glow = "prop_elevator_callbutton_bottom"
 		extent = "2.5 4 10"
 		connections =
 		{
 			OnIn =
 			{
-				cmd1 = "prop_elevator_callbutton_bottomSetAnimationTURN_ON0-1"
-				cmd2 = "relay_elevator_downTrigger0.1-1"
-				cmd3 = "prop_elevator_callbutton_bottomSetAnimationidleon0.2-1"
+				cmd1 = "!selfRunScriptCodeEntFire(\"relay_elevator_down\", \"Trigger\", null, 0, self)0-1"
 			}
-			OnOut =
+			OnUser1 =
 			{
-				cmd1 = "prop_elevator_callbutton_bottomSetAnimationidleoff0-1"
+				cmd1 = "prop_elevator_callbutton_bottomSetAnimationTURN_ON0-1"
+				cmd2 = "button_inelevatorPressIn0.1-1"
+				cmd3 = "prop_elevator_callbutton_bottomSetAnimationidleon0.2-1"
 			}
 		}
 	} );
 	EntFire( "button_callelevator_down", "PressIn" );
-	EntFire( "prop_elevator_callbutton_bottom", "SetAnimation", "idleoff", 0.3 );*/
+
 	SpawnEntityFromTable( "script_func_button", {
 		wait = -1
-		targetname = "button_callelevator"
+		targetname = "button_callelevator_up"
 		spawnflags = 1025
 		origin = "-1407.5 -9484 662"
 		glow = "prop_elevator_callbutton_top"
@@ -171,6 +162,4 @@ function OnGameEvent_round_start( params )
 			}
 		}
 	} );
-
-	//diffs:-3.5 4.6 9.503
 }

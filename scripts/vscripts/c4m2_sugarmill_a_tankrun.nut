@@ -22,6 +22,7 @@ function OnGameEvent_round_start( params )
 		Entities.FindByName( null, name ).Kill(); // because relay_elevator_down is respawned below
 
 	EntFire( "button_callelevator", "AddOutput", "speed 100" ); // to mitigate the delay from missing "Don't move" flag
+	EntFire( "button_callelevator", "AddOutput", "targetname button_callelevator_up" );
 	local ent = Entities.FindByName( null, "button_callelevator" );
 	EntityOutputs.RemoveOutput( ent, "OnPressed", "", "", "" );
 	EntityOutputs.AddOutput( ent, "OnPressed", "!activator", "SpeakResponseConcept", "c4m2_elevator_top_button", 0.0, 1 );
@@ -37,7 +38,7 @@ function OnGameEvent_round_start( params )
 	EntityOutputs.RemoveOutput( ent, "OnPressed", "", "", "" );
 	EntityOutputs.AddOutput( ent, "OnIn", "!self", "RunScriptCode", "EntFire(\"relay_elevator_*\", \"Trigger\", null, 0, self)", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnUser1", "prop_elevator_button", "SetAnimation", "TURN_ON", 0.0, -1 );
-	EntityOutputs.AddOutput( ent, "OnUser1", "button_callelevator", "PressIn", "", 0.1, -1 );
+	EntityOutputs.AddOutput( ent, "OnUser1", "button_callelevator_*", "PressIn", "", 0.1, -1 );
 	EntityOutputs.AddOutput( ent, "OnUser1", "prop_elevator_button", "SetAnimation", "idleon", 0.2, -1 );
 
 	SpawnEntityFromTable( "logic_relay", {
@@ -105,10 +106,12 @@ function OnGameEvent_round_start( params )
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "prop_elevator_button", "SetAnimation", "idleoff", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "navblock_elevator_door_top", "UnblockNav", "", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedTop", "button_inelevator", "PressOut", "", 2.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedTop", "button_callelevator_down", "PressOut", "", 2.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "relay_elevator_*", "Toggle", "", 0.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedBottom", "prop_elevator_callbutton_bottom", "SetAnimation", "idleoff", 0.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "navblock_elevator_door_bottom", "UnblockNav", "", 0.0, -1 );
-	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_callelevator", "PressOut", "", 2.0, -1 );
 	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_inelevator", "PressOut", "", 2.0, -1 );
+	EntityOutputs.AddOutput( ent, "OnReachedBottom", "button_callelevator_up", "PressOut", "", 2.0, -1 );
 
 	SpawnEntityFromTable( "script_nav_blocker", {
 		teamToBlock = -1
@@ -135,4 +138,33 @@ function OnGameEvent_round_start( params )
 		initialstate = 1
 		BlockType = 1
 	} );
+
+	SpawnEntityFromTable( "prop_dynamic", {
+		origin = "-1406.5 -9609 172.5"
+		targetname = "prop_elevator_callbutton_bottom"
+		model = "models/props_mill/freightelevatorbutton01.mdl"
+	} );
+
+	SpawnEntityFromTable( "script_func_button", {
+		wait = -1
+		targetname = "button_callelevator_down"
+		spawnflags = 1025
+		origin = "-1401 -9605.5 182"
+		glow = "prop_elevator_callbutton_bottom"
+		extent = "2.5 4 10"
+		connections =
+		{
+			OnIn =
+			{
+				cmd1 = "!selfRunScriptCodeEntFire(\"relay_elevator_down\", \"Trigger\", null, 0, self)0-1"
+			}
+			OnUser1 =
+			{
+				cmd1 = "prop_elevator_callbutton_bottomSetAnimationTURN_ON0-1"
+				cmd2 = "button_inelevatorPressIn0.1-1"
+				cmd3 = "prop_elevator_callbutton_bottomSetAnimationidleon0.2-1"
+			}
+		}
+	} );
+	EntFire( "button_callelevator_down", "PressIn" );
 }
