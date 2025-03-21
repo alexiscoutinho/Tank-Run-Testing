@@ -23,6 +23,10 @@ ChallengeScript.rawdelete( "OnGameEvent_finale_start" );
 function OnGameEvent_finale_start( params )
 {
 	delete SessionOptions.ShouldPlayBossMusic;
-	SessionState.FinaleStarted = true;
-	SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
-}
+	Director.ForceNextStage();
+	SessionState.DoubleTanks = true;
+	local infStats = {};
+	GetInfectedStats( infStats );
+	if ( infStats.Tanks > 2 )
+		SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
+}//investigate effect of shorter finale

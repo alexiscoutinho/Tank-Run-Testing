@@ -21,6 +21,7 @@ MutationOptions <-
 	cm_ProhibitBosses = true
 	cm_AggressiveSpecials = true
 
+	BileMobSize = 0
 	NoMobSpawns = true
 	EscapeSpawnTanks = false
 
@@ -59,13 +60,12 @@ MutationState <-
 	TankModels = [ "models/infected/hulk.mdl", "models/infected/hulk_dlc3.mdl", "models/infected/hulk_l4d1.mdl" ]
 	CheckDefaultModel = true
 	CheckSurvivorsInFinaleArea = true
-	FinaleStarted = false
 	HoldoutEnded = false
-	RescueDelay = 600
+	RescueDelay = 360
 	FirstSpawnDelay = 0
 	SpawnInterval = 20
 	HoldoutSpawnInterval = 40
-	//DoubleTanks = false // degenerate
+	DoubleTanks = false
 	TanksDisabled = false
 	TankHealth = 4000
 	DifficultyHealths = [ 2000, 3000, 4000, 5000 ]
@@ -86,7 +86,6 @@ local InternalState =
 	HoldoutFinale = false
 	LeftSafeAreaThink = false
 	SpawnTankThink = false
-	TankSpeedThink = true
 	BileHurtTankThink = false
 	SafeRoomAbandonThink = false
 	FinaleAreaThink = false
@@ -131,30 +130,9 @@ local function SpawnTankThink()
 	{
 		if ( ZSpawn( { type = 8 } ) )//lock safe room door when players are still loading
 		{
-			if ( SessionState.FinaleStarted && InternalState.HoldoutFinale )
+			if ( SessionState.DoubleTanks )
 				ZSpawn( { type = 8 } );
 			InternalState.LastSpawnTime = Time();
-		}
-	}
-}
-
-local function TankSpeedThink()//what if a custom map wants a faster tank?
-{
-	foreach ( tank in InternalState.Tanks )
-	{
-		if ( InternalState.BiledTanks.rawin( tank ) )
-		{
-			if ( NetProps.GetPropInt( tank, "m_nWaterLevel" ) == 0 )
-				tank.SetFriction( 2.3 );
-			else
-				tank.SetFriction( 2.5 );
-		}
-		else
-		{
-			if ( NetProps.GetPropInt( tank, "m_nWaterLevel" ) == 0 )
-				tank.SetFriction( 1.0 );
-			else
-				tank.SetFriction( 1.7 );
 		}
 	}
 }
@@ -173,8 +151,6 @@ local function TankRunThink()
 		LeftSafeAreaThink();
 	if ( InternalState.SpawnTankThink )
 		SpawnTankThink();
-	if ( InternalState.TankSpeedThink ) //stale check right now
-		TankSpeedThink();
 	if ( InternalState.BileHurtTankThink )
 		BileHurtTankThink();
 	if ( InternalState.SafeRoomAbandonThink )
@@ -183,9 +159,6 @@ local function TankRunThink()
 		FinaleAreaThink();
 	if ( InternalState.EndHoldoutThink )
 		EndHoldoutThink();
-
-	/*if ( Director.GetCommonInfectedCount() > 0 )//why only remove commons? because CI and SI limits are permeable
-		EntFire( "infected", "Kill" );*/
 
 	EntFire( "worldspawn", "CallScriptFunction", "TankRunThink", 1.0 );
 }
@@ -216,7 +189,7 @@ function AllowTakeDamage( damageTable )
 					if ( weaponClass.find( "smg" ) != null )
 						damageTable.Victim.OverrideFriction( 0.9, 2.5 );
 					else if ( weaponClass.find( "shotgun" ) != null )
-						damageTable.Victim.OverrideFriction( 1.8, 2.5 );
+						damageTable.Victim.OverrideFriction( 0.9, 3.0 );
 					else if ( weaponClass.find( "sniper" ) != null || weaponClass.find( "hunting" ) != null )
 						damageTable.Victim.OverrideFriction( 0.9, 2.5 );
 					else if ( weaponClass.find( "rifle" ) != null )
@@ -233,7 +206,8 @@ local hasChangelevel, CheckAbandonCondition, ResetAbandonSystem;
 
 weaponsToConvert <-
 {
-	// ignoring non-_spawn items
+	weapon_upgradepack_explosive = "upgrade_ammo_explosive" #L4D being L4D...
+	weapon_upgradepack_incendiary = "upgrade_ammo_incendiary"
 	weapon_upgradepack_explosive_spawn = "upgrade_ammo_explosive"
 	weapon_upgradepack_incendiary_spawn = "upgrade_ammo_incendiary"
 }
@@ -415,13 +389,16 @@ function OnGameEvent_tank_spawn( params )
 			EntFire( "tank_music_double", "PlaySound" );
 			InternalState.PlayingMetal = true;
 		}
-		else if ( SessionState.FinaleStarted )
+		else if ( InternalState.FinaleType >= 0 )
 		{
 			EntFire( "tank_music_single", "StopSound" );//can still cut off music
 			EntFire( "tank_music_finale", "PlaySound" );
 		}
 	}
 	InternalState.LastTankTime = Time();
+
+	if ( InternalState.HoldoutFinale && InternalState.Tanks.len() == 3 )
+		SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
 }
 
 function OnGameEvent_player_death( params ) // because of https://github.com/Tsuey/L4D2-Community-Update/issues/37
@@ -441,11 +418,17 @@ function OnGameEvent_player_death( params ) // because of https://github.com/Tsu
 		if ( InternalState.BiledTanks.len() == 0 )
 			InternalState.BileHurtTankThink = false;
 
-		if ( SessionState.FinaleStarted && InternalState.HoldoutFinale && !SessionState.HoldoutEnded )
+		if ( InternalState.HoldoutFinale )
 		{
-			local attacker = GetPlayerFromUserID( params["attacker"] );//assuming existence
-			if ( NetProps.GetPropInt( attacker, "m_iTeamNum" ) == 2 )
-				DecreaseHUDTimerBy( 10 );
+			if ( InternalState.Tanks.len() == 2 )
+				SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval - 10;
+
+			if ( !SessionState.HoldoutEnded )
+			{
+				local attacker = GetPlayerFromUserID( params["attacker"] );//assuming existence
+				if ( NetProps.GetPropInt( attacker, "m_iTeamNum" ) == 2 )
+					DecreaseHUDTimerBy( 10 );
+			}
 		}
 	}
 }
@@ -468,6 +451,9 @@ function OnGameEvent_player_disconnect( params )
 		InternalState.BiledTanks.rawdelete( player );
 		if ( InternalState.BiledTanks.len() == 0 )
 			InternalState.BileHurtTankThink = false;
+
+		if ( InternalState.HoldoutFinale && InternalState.Tanks.len() == 2 )
+			SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval - 10;
 	}
 }
 
@@ -481,6 +467,7 @@ function OnGameEvent_player_now_it( params )
 
 	if ( attacker.IsSurvivor() && victim.GetZombieType() == ZOMBIE_TANK && !InternalState.BiledTanks.rawin( victim ) )
 	{
+		victim.SetFriction( 2.3 );
 		InternalState.BiledTanks.rawset( victim, attacker );
 		if ( InternalState.BiledTanks.len() == 1 )
 			InternalState.BileHurtTankThink = true;
@@ -495,6 +482,7 @@ function OnGameEvent_player_no_longer_it( params )
 
 	if ( victim.GetZombieType() == ZOMBIE_TANK && InternalState.BiledTanks.rawin( victim ) )
 	{
+		victim.SetFriction( 1.0 );
 		InternalState.BiledTanks.rawdelete( victim );
 		if ( InternalState.BiledTanks.len() == 0 )
 			InternalState.BileHurtTankThink = false;
@@ -761,7 +749,7 @@ if ( hasFinale )
 		{
 			SessionOptions.ScriptedStageType = STAGE_ESCAPE;#would it be nice to have an ESCAPE stage for every finale type? for compat maybe?
 		}
-		else if ( SessionState.FinaleStarted )
+		else if ( Director.IsFinale() )
 		{
 			SessionOptions.ScriptedStageType = STAGE_DELAY;
 			SessionOptions.ScriptedStageValue = -1;
@@ -810,7 +798,7 @@ if ( hasFinale )
 	{
 		function OnGameEvent_generator_started( params )
 		{
-			if ( !SessionState.FinaleStarted )
+			if ( !Director.IsFinale() )
 				return;
 
 			if ( !SessionState.HoldoutEnded ) // shouldn't the generators be disabled instead?
@@ -823,9 +811,6 @@ if ( hasFinale )
 
 	local function InputUse()
 	{
-		InternalState.FinaleType = NetProps.GetPropInt( self, "m_type" );
-		InternalState.HoldoutFinale = InternalState.FinaleType == 0 || InternalState.FinaleType == 2;
-
 		if ( SessionState.CheckSurvivorsInFinaleArea )
 		{
 			for ( local player; player = Entities.FindByClassname( player, "player" ); )
@@ -837,6 +822,9 @@ if ( hasFinale )
 					return true;
 			}
 		}
+
+		InternalState.FinaleType = NetProps.GetPropInt( self, "m_type" );
+		InternalState.HoldoutFinale = InternalState.FinaleType == 0 || InternalState.FinaleType == 2;
 
 		if ( toggledOff )
 		{
@@ -916,17 +904,19 @@ if ( hasFinale )
 				ReleaseTriggerMultiples();
 			}
 			delete SessionOptions.ShouldPlayBossMusic;
-			SessionState.FinaleStarted = true;
+			Director.ForceNextStage(); // to prevent the HALFTIME_BOSS and FINAL_BOSS stages and skip stage 0
 
-			if ( InternalState.FinaleType == 0 )
-				Director.ForceNextStage(); // to prevent the HALFTIME_BOSS and FINAL_BOSS stages
-			else if ( InternalState.FinaleType == 4 )
+			if ( InternalState.FinaleType == 4 )
+			{
+				EntFire( "info_director", "EndScript" ); // would benefit from https://github.com/Tsuey/L4D2-Community-Update/issues/545
 				return;
+			}
 
 			HUDManageTimers( 0, TIMER_COUNTDOWN, SessionState.RescueDelay );
 			TankRunHUD.Fields.rescue_time.flags = TankRunHUD.Fields.rescue_time.flags & ~HUD_FLAG_NOTVISIBLE;
 
-			SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
+			SessionState.DoubleTanks = true;
+			SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval - (InternalState.Tanks.len() <= 2 ? 10 : 0);
 			InternalState.EndHoldoutThink = true;
 		}
 	}
@@ -940,7 +930,6 @@ if ( hasFinale )
 				ReleaseTriggerMultiples();
 			}
 			delete SessionOptions.ShouldPlayBossMusic;
-			SessionState.FinaleStarted = true;
 			Director.ForceNextStage(); // to prevent the GAUNTLET_BOSS stage
 		}
 	}

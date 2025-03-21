@@ -52,7 +52,7 @@ function GetNextStage()
 	{
 		SessionOptions.ScriptedStageType = STAGE_ESCAPE;//should i force fireworks and stop music, or maybe queue them?
 	}
-	else if ( SessionState.FinaleStarted )
+	else if ( Director.IsFinale() )
 	{
 		SessionOptions.ScriptedStageType = STAGE_DELAY;
 		SessionOptions.ScriptedStageValue = InternalState.StageDurations.pop();

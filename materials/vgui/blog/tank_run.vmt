@@ -1,0 +1,12 @@
+"UnlitGeneric"
+{
+	"$basetexture" "vgui\blog\tank_run"
+	"$translucent" 1
+	"$ignorez" 1
+	"$vertexcolor" 1
+	"$vertexalpha" 1
+	"$no_fullbright" 1
+	"$additive"		0
+
+	"$SHADERSRGBREAD360" 1
+}
