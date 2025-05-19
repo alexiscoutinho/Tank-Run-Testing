@@ -32,16 +32,11 @@ local ChurchGuyPos;
 
 function OnGameEvent_round_start_post_nav( params )
 {
-	// because of a nav issue
-	local ent = Entities.FindByName( null, "checkpoint_entrance" );
-	ent.SetOrigin( ent.GetOrigin() + Vector( 0, 4, 0 ) );
-	DoEntFire( "!self", "RunScriptCode", "self.SetOrigin( self.GetOrigin() + Vector( 0, -4, 0 ) )", 0.0, null, ent );
-
-	ent = Entities.FindByName( null, "spawn_church_zombie" );
-	NetProps.SetPropString( ent, "m_szPopulation", "tank" );
-	ent.ValidateScriptScope();
-	ent.GetScriptScope().InputSpawnZombie <- InputSpawnZombie.bindenv( this );
-	ChurchGuyPos = ent.GetOrigin();
+	local spawner = Entities.FindByName( null, "spawn_church_zombie" );
+	NetProps.SetPropString( spawner, "m_szPopulation", "tank" );
+	spawner.ValidateScriptScope();
+	spawner.GetScriptScope().InputSpawnZombie <- InputSpawnZombie.bindenv( this );
+	ChurchGuyPos = spawner.GetOrigin();
 }
 
 function OnGameEvent_round_start( params )

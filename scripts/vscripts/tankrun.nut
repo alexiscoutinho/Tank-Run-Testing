@@ -70,7 +70,7 @@ MutationState <-
 	TankHealth = 4000
 	DifficultyHealths = [ 2000, 3000, 4000, 5000 ]
 	DeployChance = 75
-	SafeRoomAbandonDelay = 10
+	AbandonDistance = 2000
 }
 
 local InternalState =
@@ -87,7 +87,6 @@ local InternalState =
 	LeftSafeAreaThink = false
 	SpawnTankThink = false
 	BileHurtTankThink = false
-	SafeRoomAbandonThink = false
 	FinaleAreaThink = false
 	EndHoldoutThink = false
 }
@@ -143,7 +142,7 @@ local function BileHurtTankThink()
 		tank.TakeDamage( 100, 0, survivor );
 }
 
-local SafeRoomAbandonThink, FinaleAreaThink, EndHoldoutThink;
+local FinaleAreaThink, EndHoldoutThink;
 
 local function TankRunThink()
 {
@@ -153,8 +152,6 @@ local function TankRunThink()
 		SpawnTankThink();
 	if ( InternalState.BileHurtTankThink )
 		BileHurtTankThink();
-	if ( InternalState.SafeRoomAbandonThink )
-		SafeRoomAbandonThink();
 	if ( InternalState.FinaleAreaThink )
 		FinaleAreaThink();
 	if ( InternalState.EndHoldoutThink )
@@ -163,14 +160,25 @@ local function TankRunThink()
 	EntFire( "worldspawn", "CallScriptFunction", "TankRunThink", 1.0 );
 }
 
+const DMG_POISON = 131072;
+
 function AllowTakeDamage( damageTable )
 {
-	if ( !damageTable.Attacker || !damageTable.Victim || !damageTable.Inflictor )
-		return true;
+	local victim = damageTable.Victim;
 
-	if ( damageTable.Victim.IsPlayer() && damageTable.Attacker.IsPlayer() )
+	if ( victim.IsPlayer() )
 	{
-		if ( damageTable.Attacker.IsSurvivor() && damageTable.Victim.GetZombieType() == ZOMBIE_TANK )
+		if ( victim.IsSurvivor() )
+		{
+			if ( damageTable.DamageType == DMG_POISON ) // should crawling suppress hopelessness?
+			{
+				local position = victim.GetOrigin();
+				local survivor = Director.GetClosestSurvivor( position, false, false );
+				if ( !survivor || (position - survivor.GetOrigin()).Length() > SessionState.AbandonDistance )
+					damageTable.DamageDone = Convars.GetFloat( "survivor_incap_hopeless_decay_rate" );
+			}
+		}
+		else
 		{
 			if ( damageTable.Inflictor.GetClassname() == "pipe_bomb_projectile" )
 				damageTable.DamageDone = 500;
@@ -187,13 +195,13 @@ function AllowTakeDamage( damageTable )
 				if ( damageTable.DamageType & DMG_BLAST )
 				{
 					if ( weaponClass.find( "smg" ) != null )
-						damageTable.Victim.OverrideFriction( 0.9, 2.5 );
+						victim.OverrideFriction( 0.9, 2.5 );
 					else if ( weaponClass.find( "shotgun" ) != null )
-						damageTable.Victim.OverrideFriction( 0.9, 3.0 );
+						victim.OverrideFriction( 0.9, 3.0 );
 					else if ( weaponClass.find( "sniper" ) != null || weaponClass.find( "hunting" ) != null )
-						damageTable.Victim.OverrideFriction( 0.9, 2.5 );
+						victim.OverrideFriction( 0.9, 2.5 );
 					else if ( weaponClass.find( "rifle" ) != null )
-						damageTable.Victim.OverrideFriction( 0.9, 2.5 );
+						victim.OverrideFriction( 0.9, 2.5 );
 				}//cant easily differentiate bigger gl explosion
 			}
 		}
@@ -202,7 +210,6 @@ function AllowTakeDamage( damageTable )
 }
 
 const FL_KILLME = 67108864;
-local hasChangelevel, CheckAbandonCondition, ResetAbandonSystem;
 
 weaponsToConvert <-
 {
@@ -254,22 +261,6 @@ function OnGameEvent_round_start( params )
 				angles = upgradepack.GetAngles().ToKVString()
 			} );//port other KVs like parent? does standard conversion even consider angles, etc?
 			upgradepack.Kill();
-		}
-	}
-
-	if ( hasChangelevel )
-	{
-		for ( local door, scope; door = Entities.FindByClassname( door, "prop_door_rotating_checkpoint" ); )
-		{
-			if ( GetFlowPercentForPosition( door.GetCenter(), false ) > 50 ) // must use conservative flow cutoff for multi-ending maps
-			{
-				door.ValidateScriptScope();
-				scope = door.GetScriptScope();
-				scope.CheckAbandonCondition <- CheckAbandonCondition.bindenv( this ); // a bit inefficient in multi-ending maps
-				scope.ResetAbandonSystem <- ResetAbandonSystem.bindenv( this );
-				door.ConnectOutput( "OnFullyClosed", "CheckAbandonCondition" );
-				door.ConnectOutput( "OnOpen", "ResetAbandonSystem" );
-			}
 		}
 	}
 
@@ -574,66 +565,6 @@ if ( Director.IsFirstMapInScenario() ) // do multi-start maps exist though?
 
 if ( !g_SecondRun )
 	return;
-
-hasChangelevel = Entities.FindByClassname( null, "info_changelevel" ) || Entities.FindByClassname( null, "trigger_changelevel" );
-if ( hasChangelevel )
-{
-	const CHECKPOINT = 2048;
-	local survivor_incap_decay_rate;
-
-	SafeRoomAbandonThink = function ()
-	{
-		if ( Time() - InternalState.SafeRoomCloseTime >= SessionState.SafeRoomAbandonDelay )
-		{
-			for ( local player; player = Entities.FindByClassname( player, "player" ); )
-			{
-				if ( NetProps.GetPropInt( player, "m_iTeamNum" ) != 2 || NetProps.GetPropInt( player, "m_lifeState" ) != 0 )
-					continue;
-
-				if ( player.IsIncapacitated() || player.IsHangingFromLedge() )
-				{
-					if ( GetCurrentFlowPercentForPlayer( player ) > 50 && player.GetLastKnownArea().HasSpawnAttributes( CHECKPOINT ) )
-						return;
-				}
-				else
-				{
-					if ( GetCurrentFlowPercentForPlayer( player ) < 50 || !player.GetLastKnownArea().HasSpawnAttributes( CHECKPOINT ) )
-						return;
-				}
-			}
-
-			survivor_incap_decay_rate = Convars.GetFloat( "survivor_incap_decay_rate" );
-			Convars.SetValue( "survivor_incap_decay_rate", Convars.GetFloat( "survivor_incap_hopeless_decay_rate" ) );
-			InternalState.SafeRoomAbandonThink = false;
-
-			function OnShutdown()
-			{
-				Convars.SetValue( "survivor_incap_decay_rate", survivor_incap_decay_rate );
-			}
-		}
-	}
-
-	CheckAbandonCondition = function ()
-	{
-		for ( local player; player = Entities.FindByClassname( player, "player" ); )
-		{
-			if ( NetProps.GetPropInt( player, "m_iTeamNum" ) != 2 || NetProps.GetPropInt( player, "m_lifeState" ) != 0 )
-				continue;
-
-			if ( GetCurrentFlowPercentForPlayer( player ) > 50 && player.GetLastKnownArea().HasSpawnAttributes( CHECKPOINT ) )//what about those null cases?//u should instead test if the standing players are in the closed saferoom, not any random open end saferoom
-			{
-				InternalState.SafeRoomCloseTime = Time();
-				InternalState.SafeRoomAbandonThink = true;
-				break;
-			}
-		}
-	}
-
-	ResetAbandonSystem = function ()
-	{
-		InternalState.SafeRoomAbandonThink = false;
-	}
-}
 
 const FINALE = 64;
 
