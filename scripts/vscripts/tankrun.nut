@@ -170,7 +170,7 @@ function AllowTakeDamage( damageTable )
 	{
 		if ( victim.IsSurvivor() )
 		{
-			if ( damageTable.DamageType == DMG_POISON ) // should crawling suppress hopelessness?
+			if ( damageTable.DamageType == DMG_POISON ) // should crawling suppress hopelessness? yes, and there should be small delay
 			{
 				local position = victim.GetOrigin();
 				local survivor = Director.GetClosestSurvivor( position, false, false );
@@ -191,18 +191,6 @@ function AllowTakeDamage( damageTable )
 					damageTable.DamageDone = damageTable.DamageDone * 1.334;
 				else if ( weaponClass == "weapon_rifle_m60" )
 					damageTable.DamageDone = damageTable.DamageDone * 1.5;
-
-				if ( damageTable.DamageType & DMG_BLAST )
-				{
-					if ( weaponClass.find( "smg" ) != null )
-						victim.OverrideFriction( 0.9, 2.5 );
-					else if ( weaponClass.find( "shotgun" ) != null )
-						victim.OverrideFriction( 0.9, 3.0 );
-					else if ( weaponClass.find( "sniper" ) != null || weaponClass.find( "hunting" ) != null )
-						victim.OverrideFriction( 0.9, 2.5 );
-					else if ( weaponClass.find( "rifle" ) != null )
-						victim.OverrideFriction( 0.9, 2.5 );
-				}//cant easily differentiate bigger gl explosion
 			}
 		}
 	}
@@ -353,7 +341,7 @@ function OnGameEvent_tank_spawn( params )
 	if ( !tank )
 		return;
 
-	InternalState.Tanks.rawset( tank, tank );
+	InternalState.Tanks.rawset( tank, null ); // victim, last player attacker
 	tank.SetMaxHealth( SessionState.TankHealth );
 	tank.SetHealth( SessionState.TankHealth );
 
@@ -392,36 +380,58 @@ function OnGameEvent_tank_spawn( params )
 		SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval;
 }
 
-function OnGameEvent_player_death( params ) // because of https://github.com/Tsuey/L4D2-Community-Update/issues/37
+function OnGameEvent_player_hurt( params )
 {
-	local player = GetPlayerFromUserID( params["userid"] );
+	local victim = GetPlayerFromUserID( params["userid"] );
 
-	if ( player.GetZombieType() == ZOMBIE_TANK )
+	if ( victim.GetZombieType() == ZOMBIE_TANK )
 	{
-		InternalState.Tanks.rawdelete( player );
-		if ( InternalState.Tanks.len() == 0 )
+		local attacker = GetPlayerFromUserID( params["attacker"] );
+		if ( attacker )
+			InternalState.Tanks[victim] = attacker;
+
+		if ( params["type"] & DMG_BLAST )
 		{
-			EntFire( "tank_music_*", "StopSound" );
-			InternalState.PlayingMetal = false;
-		}
+			local weapon = params["weapon"];
+			if ( weapon.find( "smg" ) != null )
+				victim.OverrideFriction( 0.9, 2.5 );
+			else if ( weapon.find( "shotgun" ) != null )
+				victim.OverrideFriction( 0.9, 3.0 );
+			else if ( weapon.find( "sniper" ) != null || weapon.find( "hunting" ) != null )
+				victim.OverrideFriction( 0.9, 2.5 );
+			else if ( weapon.find( "rifle" ) != null )
+				victim.OverrideFriction( 0.9, 2.5 );
+		}//cant easily differentiate bigger gl explosion
+	}
+}
 
-		InternalState.BiledTanks.rawdelete( player );
-		if ( InternalState.BiledTanks.len() == 0 )
-			InternalState.BileHurtTankThink = false;
+function OnGameEvent_tank_killed( params )
+{
+	local victim = GetPlayerFromUserID( params["userid"] );
 
-		if ( InternalState.HoldoutFinale )
+	if ( InternalState.HoldoutFinale )
+	{
+		if ( InternalState.Tanks.len() == 2 )
+			SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval - 10;
+
+		if ( !SessionState.HoldoutEnded )
 		{
-			if ( InternalState.Tanks.len() == 2 )
-				SessionState.SpawnInterval = SessionState.HoldoutSpawnInterval - 10;
-
-			if ( !SessionState.HoldoutEnded )
-			{
-				local attacker = GetPlayerFromUserID( params["attacker"] );//assuming existence
-				if ( NetProps.GetPropInt( attacker, "m_iTeamNum" ) == 2 )
-					DecreaseHUDTimerBy( 10 );
-			}
+			local attacker = GetPlayerFromUserID( params["attacker"] ) || InternalState.Tanks[victim];
+			if ( attacker && attacker.IsValid() && NetProps.GetPropInt( attacker, "m_iTeamNum" ) == 2 )
+				DecreaseHUDTimerBy( 10 );
 		}
 	}
+
+	InternalState.Tanks.rawdelete( victim );
+	if ( InternalState.Tanks.len() == 0 )
+	{
+		EntFire( "tank_music_*", "StopSound" );
+		InternalState.PlayingMetal = false;
+	}
+
+	InternalState.BiledTanks.rawdelete( victim );
+	if ( InternalState.BiledTanks.len() == 0 )
+		InternalState.BileHurtTankThink = false;
 }
 
 function OnGameEvent_player_disconnect( params )
@@ -499,12 +509,11 @@ if ( Director.IsFirstMapInScenario() ) // do multi-start maps exist though?
 {
 	function OnGameplayStart() // check for primary weapons
 	{
-		local startArea = null;
-		local startPos = null;
+		local startArea, startPos;
 
-		for ( local survivorSpawn; survivorSpawn = Entities.FindByClassname( survivorSpawn, "info_survivor_position" ); )
+		for ( local survivorSpawn, area; survivorSpawn = Entities.FindByClassname( survivorSpawn, "info_survivor_position" ); )
 		{
-			local area = NavMesh.GetNearestNavArea( survivorSpawn.GetOrigin(), 100, false, false );
+			area = NavMesh.GetNearestNavArea( survivorSpawn.GetOrigin(), 100, false, false );
 			if ( area && (area.HasSpawnAttributes( 128 ) || area.HasSpawnAttributes( 2048 )) )
 			{
 				startArea = area;
